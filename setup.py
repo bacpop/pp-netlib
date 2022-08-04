@@ -11,4 +11,4 @@ version = re.search(
 with open("README.md", "rb") as readme:
     full_description = readme.read().decode("utf-8")
 
-setup(name = "poppunk_network_utils", packages = ["main_logic"], entry_points = {"console_scripts": ["greet = main_logic.greet:main", "Hey = main_logic.other_greet:other_greeting"]}, version = version, description = "Barebones python package.", long_description = full_description, author = "Bruhad Dave")
+setup(name = "poppunk_network_utils", packages = ["pop_net_utils"], entry_points = {"console_scripts": ["run_network = pop_net_utils.__main__:main"]}, version = version, description = "PopPUNK network utilities.", long_description = full_description)
