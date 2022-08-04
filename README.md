@@ -1,2 +1,1 @@
-# pop_net_utils
-poppunk network utils dev
+Network utilities for poppunk
