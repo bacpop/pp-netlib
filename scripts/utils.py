@@ -598,3 +598,11 @@ def remove_from_db(db_name, out_name, remove_seqs, full_names = False):
     hdf_in.close()
     hdf_out.close()
 
+def setGtThreads(threads):
+    import graph_tool.all as gt
+    # Check on parallelisation of graph-tools
+    if gt.openmp_enabled():
+        gt.openmp_set_num_threads(threads)
+        sys.stderr.write('\nGraph-tools OpenMP parallelisation enabled:')
+        sys.stderr.write(' with ' + str(gt.openmp_get_num_threads()) + ' threads\n')
+

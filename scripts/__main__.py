@@ -6,28 +6,14 @@ from .load_network import *
 from .indices_refs_clusters import *
 from .construct_network import *
 
+os.environ["PP_NETLIB_BACKEND"] = "graphtool" ## add selector
+
+args = get_args()
+
 ## placeholder vars
 model = ""
 assignments = ""
 
-## parsing args - wrap in a function later
-
-# parser = argparse.ArgumentParser(description="PopPUNK network utilities")
-
-# parser.add_argument('--ref-db',type = str, help='Location of built reference database')
-# parser.add_argument('--threads', default=1, type=int, help='Number of threads to use [default = 1]')
-# graph_weights = parser.add_argument("--graph-weights", help="Save within-strain Euclidean distances into the graph", default=False, action="store_true")
-# distances = parser.add_argument("--distances", help="Prefix of input pickle of pre-calculated distances")
-# ranks = parser.add_argument("--ranks", help="Comma separated list of ranks used in lineage clustering [default = 1,2,3]", type = str, default = "1,2,3")
-# betweenness_sample = parser.add_argument('--betweenness-sample', help='Number of sequences used to estimate betweeness with a GPU [default = 100]', type = int, default = betweenness_sample_default)
-# gpu_graph = parser.add_argument("--gpu-graph", default=False, action="store_true", help="Use a GPU when calculating networks [default = False]")
-# external_clustering = parser.add_argument("--external-clustering", help="File with cluster definitions or other labels generated with any other method.", default=None)
-# indive_refine = parser.add_argument("--indiv-refine", help="Also run refinement for core and accessory individually", choices=["both", "core", "accessory"], default=None)
-# output = parser.add_argument("--output", help="Prefix for output files")
-
-# args = parser.parse_args()
-
-args = get_args()
 distances = args.distances
 output = args.output
 

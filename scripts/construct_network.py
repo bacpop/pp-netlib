@@ -631,7 +631,7 @@ def construct_network_from_assignments(ref_list, query_list, assignments, within
     connections = generate_tuples(assignments, within_label, self = (ref_list == query_list), num_ref = len(ref_list), int_offset = int_offset)
 
     # Construct network using edge list
-    graph = construct_network_from_edge_list(ref_list, query_list, connections, weights = weights, distMat = dist_matrix, previous_network = previous_network, adding_qq_dists = adding_qq_dists, old_ids = old_ids, previous_pkl = previous_pkl, summarise = False, use_gpu = use_gpu)
+    graph = construct_network_from_edge_list(ref_list, query_list, connections, weights = weights, dist_matrix = dist_matrix, previous_network = previous_network, adding_qq_dists = adding_qq_dists, old_ids = old_ids, previous_pkl = previous_pkl, summarise = False, use_gpu = use_gpu)
     if summarise:
         print_network_summary(graph, betweenness_sample = betweenness_sample, use_gpu = use_gpu)
 
