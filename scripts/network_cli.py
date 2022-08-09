@@ -1,4 +1,4 @@
-## overview for __main__
+## will become the cli and associated logic for this package: mainly for testing, maybe for general use
 
 ## imports
 #### internal imports

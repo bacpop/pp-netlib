@@ -61,7 +61,7 @@ def translate_network_indices(graph_ref_df, reference_indices):
     """Function for ensuring an updated reference network retains
     numbering consistent with sample names
 
-    ## DEPENDS ON Fns: {none}
+    ## DEPENDS ON Fns: {.:[add_self_loop]}
 
        Args:
            graph_ref_df (cudf data frame)
