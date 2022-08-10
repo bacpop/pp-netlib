@@ -32,7 +32,7 @@ def get_cugraph_triangles(graph):
     triangle_count = int(cp.around(cp.trace(cp.matmul(A, cp.matmul(A, A)))/6,0))
     return triangle_count
 
-#TODO: can fn network_summary and fn print_netwrok summary be combined?
+#TODO: can fn network_summary and fn print_network summary be combined?
 def print_network_summary(graph, betweenness_sample = betweenness_sample_default, use_gpu = False):
     """Wrapper function for printing network information
 
@@ -263,7 +263,7 @@ def construct_network_from_edge_list(ref_list, query_list, edge_list, weights = 
             List of reference sequence labels
         query_list (list)
             List of query sequence labels
-        G_df (cudf or pandas data frame) ####TODO UNUSED???
+        edge_list (cudf or pandas data frame) ####TODO UNUSED???
             Data frame in which the first two columns are the nodes linked by edges
         weights (list)
             List of edge weights
@@ -837,3 +837,28 @@ def cugraph_to_graph_tool(graph, ref_list):
 
     return graph
 
+
+
+def convert_data_to_df(network_data, weights:(bool or list), use_gpu:bool):
+    if isinstance(network_data, np.array) or isinstance(network_data, scipy.sparse.coo_matrix):
+        if not use_gpu:
+            graph_data_df = pd.DataFrame()
+        else:
+            graph_data_df = cudf.DataFrame()
+        graph_data_df["source"] = network_data.row
+        graph_data_df["destination"] =  network_data.col
+        graph_data_df["weights"] = network_data.data
+
+        return graph_data_df
+
+    elif isinstance(network_data, pd.DataFrame) or isinstance(network_data, cudf.DataFrame):
+        if weights:
+            network_data.columns = ["source","destination","weights"]
+        elif isinstance(weights, list):
+            network_data.columns = ["source","destination"]
+            network_data["weights"] = weights
+        else:
+            network_data.columns = ["source","destination"]
+
+        return network_data
+        
