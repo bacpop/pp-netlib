@@ -7,10 +7,10 @@
 # from .construct_network import *
 
 import os, sys
-import weakref
 import numpy as np
 import pandas as pd
 import graph_tool.all as gt
+from scripts.cliques import prune_cliques
 
 from scripts.construct_network import convert_data_to_df, initial_graph_properties, network_summary, process_previous_network
 from scripts.indices_refs_clusters import add_self_loop
@@ -84,31 +84,32 @@ class Network:
             if len(network_data_df) > 1:
                 edge_array = cp.array(network_data_df, dtype = np.int32)
                 edge_gpu_matrix = cuda.to_device(edge_array)
-                gpu_graph_df = cudf.DataFrame(edge_gpu_matrix, columns = ['source','destination'])
+                gpu_graph_df = cudf.DataFrame(edge_gpu_matrix, columns = ["source","destination"])
             else:
                 # Cannot generate an array when one edge
-                gpu_graph_df = cudf.DataFrame(columns = ['source','destination'])
-                gpu_graph_df['source'] = [network_data_df[0][0]]
-                gpu_graph_df['destination'] = [network_data_df[0][1]]
+                gpu_graph_df = cudf.DataFrame(columns = ["source","destination"])
+                gpu_graph_df["source"] = [network_data_df[0][0]]
+                gpu_graph_df["destination"] = [network_data_df[0][1]]
+
             if weights is not None:
-                gpu_graph_df['weights'] = weights
+                gpu_graph_df["weights"] = weights
 
             if previous_network is not None:
                 G_extra_df = cudf.DataFrame()
-                G_extra_df['source'] = extra_sources
-                G_extra_df['destination'] = extra_targets
+                G_extra_df["source"] = extra_sources
+                G_extra_df["destination"] = extra_targets
                 if extra_weights is not None:
-                    G_extra_df['weights'] = extra_weights
+                    G_extra_df["weights"] = extra_weights
                 gpu_graph_df = cudf.concat([gpu_graph_df,G_extra_df], ignore_index = True)
 
-        # direct conversion
-        # ensure the highest-integer node is included in the edge list
-        # by adding a self-loop if necessary; see https://github.com/rapidsai/cugraph/issues/1206
-        max_in_vertex_labels = len(vertex_labels)-1
-        use_weights = False
-        if weights:
-            use_weights = True
-        self.graph = add_self_loop(gpu_graph_df, max_in_vertex_labels, weights = use_weights, renumber = False)
+            # direct conversion
+            # ensure the highest-integer node is included in the edge list
+            # by adding a self-loop if necessary; see https://github.com/rapidsai/cugraph/issues/1206
+            max_in_vertex_labels = len(vertex_labels)-1
+            use_weights = False
+            if weights:
+                use_weights = True
+            self.graph = add_self_loop(gpu_graph_df, max_in_vertex_labels, weights = use_weights, renumber = False)
                 
         return self.graph
 
@@ -118,8 +119,7 @@ class Network:
         ################################
 
     def prune(self):
-        # call to functions that prune a network
-        print("pruning network")
+        prune_cliques() ###TODO populate this functino call with arguments
         return
 
     def summarize(self, summary_file_prefix):
@@ -139,6 +139,7 @@ class Network:
         # print some summaries
         if not self.graph:
             raise RuntimeError("Graph not set")
+        
         (metrics, scores) = network_summary(self.graph, betweenness_sample = 100, use_gpu = self.use_gpu)
 
         summary_contents = ("Network summary:\n" + "\n".join(["\tComponents\t\t\t\t" + str(metrics[0]),
@@ -168,20 +169,49 @@ class Network:
         print("visualizing network")
         return #files associated with viz
 
-    def _convert(self, type1, type2):
-        # interconversions between cugraph, graphtool, networkx?
-        print(f"converting from {type1} to {type2}")
-        return
+    def load_network(self, network_file):
+        """Load the network based on input options
+       Returns the network as a graph-tool format graph, and sets
+       the slope parameter of the passed model object.
 
-    def load_network(self):
-        # reading in dataframe
-        # add input data conversion to dataframe here?
-        print("loading data")
-        return
+       ## DEPENDS ON Fns: {none}
+
+       Args:
+            network_file (str)
+                Network file name
+            use_gpu (bool)
+                Use cugraph library to load graph
+       Returns:
+            genome_network (graph)
+                The loaded network
+    """
+        # Load the network from the specified file
+
+        if not self.use_gpu:
+            genome_network = gt.load_graph(network_file)
+            sys.stderr.write("Network loaded: " + str(len(list(genome_network.vertices()))) + " samples\n")
+        else:
+            graph_df = cudf.read_csv(network_file, compression = "gzip")
+            if "src" in graph_df.columns:
+                graph_df.rename(columns={"src": "source", "dst": "destination"}, inplace=True)
+            genome_network = cugraph.Graph()
+            if "weights" in graph_df.columns:
+                graph_df = graph_df[["source", "destination", "weights"]]
+                genome_network.from_cudf_edgelist(graph_df, edge_attr = "weights", renumber = False)
+            else:
+                genome_network.from_cudf_edgelist(graph_df, renumber = False)
+            sys.stderr.write("Network loaded: " + str(genome_network.number_of_vertices()) + " samples\n")
+
+        return genome_network
 
     def add_to_network(self, datapoint):
-        # calls functions which load a preexisting network, or work with a newly built one, and add data to it
+        # calls functions which load a preexisting network, or work with a newly built one, and add data to it?
         print(f"adding {datapoint} to network")
+        return
+
+    def _convert(self, type1, type2):
+        ### TODO call load_network, use network_to_edges, then call construct, add check to prevent computation in case of missing imports
+        print(f"converting from {type1} to {type2}")
         return
 
     def save(self, prefix, suffix, use_graphml):

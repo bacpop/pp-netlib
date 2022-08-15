@@ -333,7 +333,7 @@ def print_clusters(graph, ref_list, out_prefix=None, old_cluster_file=None, exte
 
     return(clustering)
 
-def extract_references(graph, db_order, out_prefix, out_suffix = '', type_isolate = None, existing_refs = None, threads = 1, use_gpu = False):
+def extract_references(graph, db_order, out_prefix, out_suffix = "", type_isolate = None, existing_refs = None, threads = 1, use_gpu = False):
     """Extract references for each cluster based on cliques
        Writes chosen references to file by calling :func:`~writeReferences`
 

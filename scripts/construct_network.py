@@ -59,95 +59,6 @@ def print_network_summary(graph, betweenness_sample = betweenness_sample_default
                                                    "\tScore (w/ weighted-betweenness)\t\t" + "{:.4f}".format(scores[2])])
                                                    + "\n")
 
-def network_summary(graph, calc_betweenness=True, betweenness_sample = betweenness_sample_default, use_gpu = False):
-    """Provides summary values about the network
-
-    ## DEPENDS ON Fns: {None}
-
-    Args:
-        graph (graph)
-            The network of strains
-        calc_betweenness (bool)
-            Whether to calculate betweenness stats
-        use_gpu (bool)
-            Whether to use cugraph for graph analysis
-    Returns:
-        metrics (list)
-            List with # components, density, transitivity, mean betweenness
-            and weighted mean betweenness
-        scores (list)
-            List of scores
-    """
-    if not use_gpu:
-
-        component_assignments, component_frequencies = gt.label_components(graph)
-        components = len(component_frequencies)
-        density = len(list(graph.edges()))/(0.5 * len(list(graph.vertices())) * (len(list(graph.vertices())) - 1))
-        transitivity = gt.global_clustering(graph)[0]
-
-    else:
-        use_gpu = check_and_set_gpu(use_gpu, gpu_lib, quit_on_fail = True)
-
-        component_assignments = cugraph.components.connectivity.connected_components(graph)
-        component_nums = component_assignments['labels'].unique().astype(int)
-        components = len(component_nums)
-        density = graph.number_of_edges()/(0.5 * graph.number_of_vertices() * graph.number_of_vertices() - 1)
-        # consistent with graph-tool for small graphs - triangle counts differ for large graphs
-        # could reflect issue https://github.com/rapidsai/cugraph/issues/1043
-        # this command can be restored once the above issue is fixed - scheduled for cugraph 0.20
-#        triangle_count = cugraph.community.triangle_count.triangles(G)/3
-        triangle_count = 3*get_cugraph_triangles(graph)
-        degree_df = graph.in_degree()
-        # consistent with graph-tool
-        triad_count = 0.5 * sum([d * (d - 1) for d in degree_df[degree_df['degree'] > 1]['degree'].to_pandas()])
-        if triad_count > 0:
-            transitivity = triangle_count/triad_count
-        else:
-            transitivity = 0.0
-
-    mean_bt = 0
-    weighted_mean_bt = 0
-    if calc_betweenness:
-        betweenness = []
-        sizes = []
-
-        if not use_gpu:
-            for component, size in enumerate(component_frequencies):
-                if size > 3:
-                    vfilt = component_assignments.a == component
-                    subgraph = gt.GraphView(graph, vfilt=vfilt)
-                    betweenness.append(max(gt.betweenness(subgraph, norm = True)[0].a))
-                    sizes.append(size)
-        else:
-            component_frequencies = component_assignments['labels'].value_counts(sort = True, ascending = False)
-            for component in component_nums.to_pandas():
-                size = component_frequencies[component_frequencies.index == component].iloc[0].astype(int)
-                if size > 3:
-                    component_vertices = component_assignments['vertex'][component_assignments['labels']==component]
-                    subgraph = cugraph.subgraph(graph, component_vertices)
-                    if len(component_vertices) >= betweenness_sample:
-                        component_betweenness = cugraph.betweenness_centrality(subgraph,
-                                                                                k = betweenness_sample,
-                                                                                normalized = True)
-                    else:
-                        component_betweenness = cugraph.betweenness_centrality(subgraph,
-                                                                                normalized = True)
-                    betweenness.append(component_betweenness['betweenness_centrality'].max())
-                    sizes.append(size)
-
-        if len(betweenness) > 1:
-            mean_bt = np.mean(betweenness)
-            weighted_mean_bt = np.average(betweenness, weights=sizes)
-        elif len(betweenness) == 1:
-            mean_bt = betweenness[0]
-            weighted_mean_bt = betweenness[0]
-
-    # Calculate scores
-    metrics = [components, density, transitivity, mean_bt, weighted_mean_bt]
-    base_score = transitivity * (1 - density)
-    scores = [base_score, base_score * (1 - metrics[3]), base_score * (1 - metrics[4])]
-    return(metrics, scores)
-
 def process_weights(dist_matrix, weights_type):
     """Calculate edge weights from the distance matrix
 
@@ -178,78 +89,6 @@ def process_weights(dist_matrix, weights_type):
     else:
         sys.stderr.write("Require distance matrix to calculate distances\n")
     return processed_weights
-
-def process_previous_network(previous_network = None, adding_qq_dists = False, old_ids = None, previous_pkl = None, vertex_labels = None, weights = False, use_gpu = False):
-    """Extract edge types from an existing network
-
-    ## DEPENDS ON Fns: {.load_network: [network_to_edges]}
-
-    Args:
-        previous_network (str or graph object)
-            Name of file containing a previous network to be integrated into this new
-            network, or already-loaded graph object
-        adding_qq_dists (bool)
-            Boolean specifying whether query-query edges are being added
-            to an existing network, such that not all the sequence IDs will
-            be found in the old IDs, which should already be correctly ordered
-        old_ids (list)
-            Ordered list of vertex names in previous network
-        previous_pkl (str)
-            Name of file containing the names of the sequences in the previous_network
-            ordered based on the original network construction
-        vertex_labels (list)
-            Ordered list of sequence labels
-        weights (bool)
-            Whether weights should be extracted from the previous network
-        use_gpu (bool)
-            Whether to use GPUs for network construction
-    Returns:
-        extra_sources (list)
-            List of source node identifiers
-        extra_targets (list)
-            List of destination node identifiers
-        extra_weights (list or None)
-            List of edge weights
-    """
-    if previous_pkl is not None or old_ids is not None:
-        if weights:
-            # Extract from network
-            extra_sources, extra_targets, extra_weights = network_to_edges(previous_network, vertex_labels, adding_qq_dists = adding_qq_dists, old_ids = old_ids, previous_pkl = previous_pkl, weights = True, use_gpu = use_gpu)
-        else:
-            # Extract from network
-            extra_sources, extra_targets = network_to_edges(previous_network, vertex_labels, adding_qq_dists = adding_qq_dists, old_ids = old_ids, previous_pkl = previous_pkl, weights = False, use_gpu = use_gpu)
-            extra_weights = None
-    else:
-        sys.stderr.write("A distance pkl corresponding to " + previous_pkl + " is required for loading\n")
-        sys.exit(1)
-
-    return extra_sources, extra_targets, extra_weights
-
-def initial_graph_properties(ref_list, query_list):
-    """Initial processing of sequence names for
-    network construction.
-
-    ## DEPENDS ON Fns: {None}
-
-    Args:
-        ref_list (list)
-            List of reference sequence labels
-        query_list (list)
-            List of query sequence labels
-    Returns:
-        vertex_labels (list)
-            Ordered list of sequences in network
-        self_comparison (bool)
-            Whether the network is being constructed from all-v-all distances or
-            reference-v-query information
-    """
-    if ref_list == query_list:
-        self_comparison = True
-        vertex_labels = ref_list
-    else:
-        self_comparison = False
-        vertex_labels = ref_list +  query_list
-    return vertex_labels, self_comparison
 
 def construct_network_from_edge_list(ref_list, query_list, edge_list, weights = None, dist_matrix = None, previous_network = None, adding_qq_dists = False, old_ids = None, previous_pkl = None, betweenness_sample = betweenness_sample_default, summarise = True, use_gpu = False):
     """Construct an undirected network using a data frame of edges. Nodes are samples and
@@ -839,6 +678,12 @@ def cugraph_to_graph_tool(graph, ref_list):
 
 
 
+##################
+#                #
+#    Fns USED    #
+#                #
+##################
+
 def convert_data_to_df(network_data, weights:(bool or list), use_gpu:bool):
     if isinstance(network_data, np.array) or isinstance(network_data, scipy.sparse.coo_matrix):
         if not use_gpu:
@@ -861,4 +706,165 @@ def convert_data_to_df(network_data, weights:(bool or list), use_gpu:bool):
             network_data.columns = ["source","destination"]
 
         return network_data
-        
+
+def network_summary(graph, calc_betweenness=True, betweenness_sample = betweenness_sample_default, use_gpu = False):
+    """Provides summary values about the network
+
+    ## DEPENDS ON Fns: {None}
+
+    Args:
+        graph (graph)
+            The network of strains
+        calc_betweenness (bool)
+            Whether to calculate betweenness stats
+        use_gpu (bool)
+            Whether to use cugraph for graph analysis
+    Returns:
+        metrics (list)
+            List with # components, density, transitivity, mean betweenness
+            and weighted mean betweenness
+        scores (list)
+            List of scores
+    """
+    if not use_gpu:
+
+        component_assignments, component_frequencies = gt.label_components(graph)
+        components = len(component_frequencies)
+        density = len(list(graph.edges()))/(0.5 * len(list(graph.vertices())) * (len(list(graph.vertices())) - 1))
+        transitivity = gt.global_clustering(graph)[0]
+
+    else:
+        use_gpu = check_and_set_gpu(use_gpu, gpu_lib, quit_on_fail = True)
+
+        component_assignments = cugraph.components.connectivity.connected_components(graph)
+        component_nums = component_assignments['labels'].unique().astype(int)
+        components = len(component_nums)
+        density = graph.number_of_edges()/(0.5 * graph.number_of_vertices() * graph.number_of_vertices() - 1)
+        # consistent with graph-tool for small graphs - triangle counts differ for large graphs
+        # could reflect issue https://github.com/rapidsai/cugraph/issues/1043
+        # this command can be restored once the above issue is fixed - scheduled for cugraph 0.20
+#        triangle_count = cugraph.community.triangle_count.triangles(G)/3
+        triangle_count = 3*get_cugraph_triangles(graph)
+        degree_df = graph.in_degree()
+        # consistent with graph-tool
+        triad_count = 0.5 * sum([d * (d - 1) for d in degree_df[degree_df['degree'] > 1]['degree'].to_pandas()])
+        if triad_count > 0:
+            transitivity = triangle_count/triad_count
+        else:
+            transitivity = 0.0
+
+    mean_bt = 0
+    weighted_mean_bt = 0
+    if calc_betweenness:
+        betweenness = []
+        sizes = []
+
+        if not use_gpu:
+            for component, size in enumerate(component_frequencies):
+                if size > 3:
+                    vfilt = component_assignments.a == component
+                    subgraph = gt.GraphView(graph, vfilt=vfilt)
+                    betweenness.append(max(gt.betweenness(subgraph, norm = True)[0].a))
+                    sizes.append(size)
+        else:
+            component_frequencies = component_assignments['labels'].value_counts(sort = True, ascending = False)
+            for component in component_nums.to_pandas():
+                size = component_frequencies[component_frequencies.index == component].iloc[0].astype(int)
+                if size > 3:
+                    component_vertices = component_assignments['vertex'][component_assignments['labels']==component]
+                    subgraph = cugraph.subgraph(graph, component_vertices)
+                    if len(component_vertices) >= betweenness_sample:
+                        component_betweenness = cugraph.betweenness_centrality(subgraph,
+                                                                                k = betweenness_sample,
+                                                                                normalized = True)
+                    else:
+                        component_betweenness = cugraph.betweenness_centrality(subgraph,
+                                                                                normalized = True)
+                    betweenness.append(component_betweenness['betweenness_centrality'].max())
+                    sizes.append(size)
+
+        if len(betweenness) > 1:
+            mean_bt = np.mean(betweenness)
+            weighted_mean_bt = np.average(betweenness, weights=sizes)
+        elif len(betweenness) == 1:
+            mean_bt = betweenness[0]
+            weighted_mean_bt = betweenness[0]
+
+    # Calculate scores
+    metrics = [components, density, transitivity, mean_bt, weighted_mean_bt]
+    base_score = transitivity * (1 - density)
+    scores = [base_score, base_score * (1 - metrics[3]), base_score * (1 - metrics[4])]
+    return(metrics, scores)
+
+def initial_graph_properties(ref_list, query_list):
+    """Initial processing of sequence names for
+    network construction.
+
+    ## DEPENDS ON Fns: {None}
+
+    Args:
+        ref_list (list)
+            List of reference sequence labels
+        query_list (list)
+            List of query sequence labels
+    Returns:
+        vertex_labels (list)
+            Ordered list of sequences in network
+        self_comparison (bool)
+            Whether the network is being constructed from all-v-all distances or
+            reference-v-query information
+    """
+    if ref_list == query_list:
+        self_comparison = True
+        vertex_labels = ref_list
+    else:
+        self_comparison = False
+        vertex_labels = ref_list +  query_list
+    return vertex_labels, self_comparison
+
+def process_previous_network(previous_network = None, adding_qq_dists = False, old_ids = None, previous_pkl = None, vertex_labels = None, weights = False, use_gpu = False):
+    """Extract edge types from an existing network
+
+    ## DEPENDS ON Fns: {.load_network: [network_to_edges]}
+
+    Args:
+        previous_network (str or graph object)
+            Name of file containing a previous network to be integrated into this new
+            network, or already-loaded graph object
+        adding_qq_dists (bool)
+            Boolean specifying whether query-query edges are being added
+            to an existing network, such that not all the sequence IDs will
+            be found in the old IDs, which should already be correctly ordered
+        old_ids (list)
+            Ordered list of vertex names in previous network
+        previous_pkl (str)
+            Name of file containing the names of the sequences in the previous_network
+            ordered based on the original network construction
+        vertex_labels (list)
+            Ordered list of sequence labels
+        weights (bool)
+            Whether weights should be extracted from the previous network
+        use_gpu (bool)
+            Whether to use GPUs for network construction
+    Returns:
+        extra_sources (list)
+            List of source node identifiers
+        extra_targets (list)
+            List of destination node identifiers
+        extra_weights (list or None)
+            List of edge weights
+    """
+    if previous_pkl is not None or old_ids is not None:
+        if weights:
+            # Extract from network
+            extra_sources, extra_targets, extra_weights = network_to_edges(previous_network, vertex_labels, adding_qq_dists = adding_qq_dists, old_ids = old_ids, previous_pkl = previous_pkl, weights = True, use_gpu = use_gpu)
+        else:
+            # Extract from network
+            extra_sources, extra_targets = network_to_edges(previous_network, vertex_labels, adding_qq_dists = adding_qq_dists, old_ids = old_ids, previous_pkl = previous_pkl, weights = False, use_gpu = use_gpu)
+            extra_weights = None
+    else:
+        sys.stderr.write("A distance pkl corresponding to " + previous_pkl + " is required for loading\n")
+        sys.exit(1)
+
+    return extra_sources, extra_targets, extra_weights
+

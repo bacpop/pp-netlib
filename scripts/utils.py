@@ -133,39 +133,6 @@ def gen_unword(unique=True):
                 break
         yield word
 
-def check_and_set_gpu(use_gpu, gpu_lib, quit_on_fail = False):
-    """Check GPU libraries can be loaded and set managed memory.
-    Args:
-        use_gpu (bool)
-            Whether GPU packages have been requested
-        gpu_lib (bool)
-            Whether GPU packages are available
-    Returns:
-        use_gpu (bool)
-            Whether GPU packages can be used
-    """
-    # load CUDA libraries
-    if use_gpu and not gpu_lib:
-        if quit_on_fail:
-            sys.stderr.write("Unable to load GPU libraries; exiting\n")
-            sys.exit(1)
-        else:
-            sys.stderr.write("Unable to load GPU libraries; using CPU libraries "
-            "instead\n")
-            use_gpu = False
-
-    # Set memory management for large networks
-    if use_gpu:
-        rmm.reinitialize(managed_memory=True)
-        cudf.set_allocator("managed")
-        if "cupy" in sys.modules:
-            cupy.cuda.set_allocator(rmm.rmm_cupy_allocator)
-        if "cuda" in sys.modules:
-            cuda.set_memory_manager(rmm.RMMNumbaManager)
-        assert(rmm.is_initialized())
-
-    return use_gpu
-
 def generate_tuples():
     #TODO - from poppunk-refine
     return
@@ -606,3 +573,40 @@ def setGtThreads(threads):
         sys.stderr.write('\nGraph-tools OpenMP parallelisation enabled:')
         sys.stderr.write(' with ' + str(gt.openmp_get_num_threads()) + ' threads\n')
 
+##################
+#                #
+#    UNUSED Fns  #
+#                #
+##################
+def check_and_set_gpu(use_gpu, gpu_lib, quit_on_fail = False):
+    """Check GPU libraries can be loaded and set managed memory.
+    Args:
+        use_gpu (bool)
+            Whether GPU packages have been requested
+        gpu_lib (bool)
+            Whether GPU packages are available
+    Returns:
+        use_gpu (bool)
+            Whether GPU packages can be used
+    """
+    # load CUDA libraries
+    if use_gpu and not gpu_lib:
+        if quit_on_fail:
+            sys.stderr.write("Unable to load GPU libraries; exiting\n")
+            sys.exit(1)
+        else:
+            sys.stderr.write("Unable to load GPU libraries; using CPU libraries "
+            "instead\n")
+            use_gpu = False
+
+    # Set memory management for large networks
+    if use_gpu:
+        rmm.reinitialize(managed_memory=True)
+        cudf.set_allocator("managed")
+        if "cupy" in sys.modules:
+            cupy.cuda.set_allocator(rmm.rmm_cupy_allocator)
+        if "cuda" in sys.modules:
+            cuda.set_memory_manager(rmm.RMMNumbaManager)
+        assert(rmm.is_initialized())
+
+    return use_gpu
