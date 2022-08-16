@@ -209,9 +209,20 @@ class Network:
         print(f"adding {datapoint} to network")
         return
 
-    def _convert(self, type1, type2):
+    def _convert(self, intial_format, target_format):
         ### TODO call load_network, use network_to_edges, then call construct, add check to prevent computation in case of missing imports
-        print(f"converting from {type1} to {type2}")
+
+        if intial_format == "cugraph":
+            cugraph_dataframe = cugraph.to_pandas_edgelist(self.graph)
+
+
+
+        if target_format == "cugraph" and not self.use_gpu:
+            sys.stderr.write("You have asked for your gaph to be converted to cugraph format, but your system/environment seems to be missing gpu related imports. Converting anyway...")
+
+        
+
+        print(f"converting from {intial_format} to {target_format}")
         return
 
     def save(self, prefix, suffix, use_graphml):
