@@ -578,6 +578,7 @@ def add_query_to_network(db_funcs, ref_list, query_list, graph, kmers, assignmen
     graph = construct_network_from_assignments(ref_list, query_list, assignments, within_label = model.within_label, previous_network = graph, old_ids = ref_list, dist_matrix = weights, weights_type = distance_type, summarise = False, use_gpu = use_gpu)
 
     # Calculate all query-query distances too, if updating database
+    # TODO move this back into PopPUNK call, start from graph call
     if query_query_dists:
         if len(query_list) == 1:
             qq_dist_matrix = np.zeros((0, 2), dtype=np.float32)
