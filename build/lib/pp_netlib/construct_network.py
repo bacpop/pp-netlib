@@ -687,7 +687,7 @@ def cugraph_to_graph_tool(graph, ref_list):
 ##################
 
 def convert_data_to_df(network_data, weights:(bool or list), use_gpu:bool):
-    if isinstance(network_data, scipy.sparse.coo_matrix):
+    if isinstance(network_data, np.ndarray) or isinstance(network_data, scipy.sparse.coo_matrix):
         if not use_gpu:
             graph_data_df = pd.DataFrame()
         else:
