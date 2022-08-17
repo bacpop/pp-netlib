@@ -10,19 +10,19 @@ import h5py
 #import cudf
 #import cupy
 
-from numba import cuda
+# from numba import cuda
 
 
-try:
-    import cupyx
-    import cugraph
-    import cudf
-    import cupy as cp
-    from numba import cuda
-    import rmm
-    gpu_lib = True
-except ImportError as e:
-    gpu_lib = False
+# try:
+#     import cupyx
+#     import cugraph
+#     import cudf
+#     import cupy as cp
+#     from numba import cuda
+#     import rmm
+#     gpu_lib = True
+# except ImportError as e:
+#     gpu_lib = False
 
 
 betweenness_sample_default = 100

@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from numba import cuda
+#from numba import cuda
 import graph_tool.all as gt
 
 #import cudf
@@ -457,7 +457,7 @@ def construct_network_from_assignments(ref_list, query_list, assignments, within
     """
 
     # Check GPU library use
-    use_gpu = check_and_set_gpu(use_gpu, gpu_lib, quit_on_fail = True)
+    #use_gpu = check_and_set_gpu(use_gpu, gpu_lib, quit_on_fail = True)
 
     # Filter weights to only the relevant edges
     if weights is not None:

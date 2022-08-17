@@ -35,7 +35,7 @@ class Network:
                 from numba import cuda
                 import rmm
                 use_gpu = True
-            except ImportError as e:
+            except ImportError or ModuleNotFoundError as e:
                 sys.stderr.write("Unable to load GPU libraries; using CPU libraries instead\n")
                 use_gpu = False
 
