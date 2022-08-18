@@ -45,13 +45,60 @@ class Network:
         # Check GPU library use
         use_gpu = self.use_gpu
 
-        if isinstance(network_data, np.ndarray):
-            construct_network_from_assignments(ref_list, ref_list, assignments)
+        ### if input data is a pandas dataframe:
+        if isinstance(network_data, pd.DataFrame):
+            if use_gpu:
+                network_data = cudf.from_pandas(network_data) ## convert to cudf if use_gpu
+            else:
+                pass
+            
+            ## add column names
+            network_data.columns = ["source", "destination"]
+
+            ## initialise graph_tool graph object
+            self.graph = gt.Graph(directed = False)
+            self.graph.add_vertex(len(network_data))
+
+            ## add weights column if weights provided as list (add error catching?)
+            if weights is not None:
+                network_data["weights"] = weights
+
+                #### TODO ####
+                eweight = self.graph.new_ep("float")
+                self.graph.add_edge_list(network_data.values, eprops = [eweight])
+                self.graph.edge_properties["weight"] = eweight
+                #### TODO ####
+            else:
+                vmap = self.graph.add_edge_list(network_data.values) ## add the ability to add vertex feature ie sample names etc
+
+            return vmap
+
+        if isinstance(network_data, scipy.sparse.coo_matrix):
+            if not use_gpu:
+                graph_data_df = pd.DataFrame()
+            else:
+                graph_data_df = cudf.DataFrame()
+            graph_data_df["source"] = network_data.row
+            graph_data_df["destination"] =  network_data.col
+            graph_data_df["weights"] = network_data.data
+
+        ## self.graph = gt.Graph(directed = False) ## initialise graph_tool graph object
+
+        if isinstance(network_data, list):
+            if weights is not None:
+                weighted_edges = []
+                for edge in network_data:
+                    weighted_edges.append(edge + (weights[network_data.index(edge)],))
+
+                #### NEEDS SOME MORE THOUGHT ####
+                if previous_network is not None:
+                        extra_sources, extra_targets, extra_weights = process_previous_network(previous_network = previous_network, adding_qq_dists = adding_qq_dists, old_ids = old_ids, previous_pkl = previous_pkl, vertex_labels = vertex_labels, weights = (weights is not None), use_gpu = use_gpu)
+                        for (src, dest, weight) in zip(extra_sources, extra_targets, extra_weights):
+                                weighted_edges.append((src, dest, weight))
+            
 
         # data structures
         vertex_labels, self_comparison = initial_graph_properties(self.ref_list, self.query_list)
-
-        network_data_df = convert_data_to_df(network_data, weights, use_gpu)
 
         ################################
         #   TODO TODO TODO TODO TODO   #
