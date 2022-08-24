@@ -57,8 +57,11 @@ def gt_test_from_df(graph, data_df, network, weights):
     weighted_edges = [we for we in weighted_graph.edges()]
     test_weighted_edges = [twe for twe in testing_weighted_network.graph.edges()]
 
-    ref_weights = [weighted_graph.ep["weight"][v] for v in weighted_graph.edges()]
-    test_weights = [testing_weighted_network.graph.ep["weight"][v] for v in testing_weighted_network.graph.edges()]
+    ref_weights = [weighted_graph.ep["weight"][e] for e in weighted_graph.edges()]
+    test_weights = [testing_weighted_network.graph.ep["weight"][e] for e in testing_weighted_network.graph.edges()]
+
+    # print([(edge.source(), edge.target()) for edge in weighted_graph.edges()])
+    # print(ref_weights)
 
     try:
         assert edges == test_edges
@@ -67,6 +70,7 @@ def gt_test_from_df(graph, data_df, network, weights):
         print("gt_test_from_df passed.")
     except AssertionError as ae:
         print("gt_test_from_df failed.")
+        raise ae
 
 
 def gt_test_from_list(graph, data_list, network, weights):
@@ -80,8 +84,8 @@ def gt_test_from_list(graph, data_list, network, weights):
     weighted_edges = [we for we in weighted_graph.edges()]
     test_weighted_edges = [twe for twe in testing_weighted_network.graph.edges()]
 
-    ref_weights = [weighted_graph.ep["weight"][v] for v in weighted_graph.edges()]
-    test_weights = [testing_weighted_network.graph.ep["weight"][v] for v in testing_weighted_network.graph.edges()]
+    ref_weights = [weighted_graph.ep["weight"][e] for e in weighted_graph.edges()]
+    test_weights = [testing_weighted_network.graph.ep["weight"][e] for e in testing_weighted_network.graph.edges()]
 
     try:
         assert edges == test_edges
@@ -91,6 +95,7 @@ def gt_test_from_list(graph, data_list, network, weights):
     except AssertionError as ae:
         print("gt_test_from_list failed.")
 
+
 def gt_test_from_sparse_matrix(weighted_graph, data_matrix, weighted_network):
 
     weighted_network.construct(network_data = data_matrix)
@@ -98,8 +103,8 @@ def gt_test_from_sparse_matrix(weighted_graph, data_matrix, weighted_network):
     weighted_edges = [we for we in weighted_graph.edges()]
     test_weighted_edges = [twe for twe in weighted_network.graph.edges()]
 
-    ref_weights = [weighted_graph.ep["weight"][v] for v in weighted_graph.edges()]
-    test_weights = [weighted_network.graph.ep["weight"][v] for v in weighted_network.graph.edges()]
+    ref_weights = [weighted_graph.ep["weight"][e] for e in weighted_graph.edges()]
+    test_weights = [weighted_network.graph.ep["weight"][e] for e in weighted_network.graph.edges()]
 
     try:
         assert weighted_edges == test_weighted_edges
@@ -108,7 +113,6 @@ def gt_test_from_sparse_matrix(weighted_graph, data_matrix, weighted_network):
     except:
         print("gt_test_from_sparse_matrix failed.")
     
-
 
 if __name__ == "__main__":
     gt_test_from_df(graph, sample_df, testing_network, weights)

@@ -206,3 +206,33 @@ def process_previous_network(previous_network = None, adding_qq_dists = False, o
 
     return extra_sources, extra_targets, extra_weights
 
+def read_in_previous_network(previous_network: str or object, vprops: None, eprops: None):
+    if isinstance(previous_network, str):
+        prev_graph = gt.Graph()
+        prev_graph.load(previous_network)
+    else:
+        prev_graph = previous_network
+
+    if vprops is not None:
+        vprop_dict = {}
+        for v in prev_graph.vertices():
+            for vprop in vprops:
+                vprop_dict[prev_graph.vertex_index[v]] = (vprop, prev_graph.vertex_properties[vprop][v])
+
+    ## get edge lists
+    edge_data = []
+    # sources = gt.edge_endpoint_property(prev_graph, prev_graph.vertex_index, "source")
+    # targets = gt.edge_endpoint_property(prev_graph, prev_graph.vertex_index, "target")
+    edge_data.append(gt.edge_endpoint_property(prev_graph, prev_graph.vertex_index, "source"))
+    edge_data.append(gt.edge_endpoint_property(prev_graph, prev_graph.vertex_index, "target"))
+    
+    if eprops is not None:
+        for eprop in eprops:
+            edge_data.append([prev_graph.edge_properties[eprop][edge] for edge in prev_graph.edges()])
+
+    prev_edge_list = list(zip(*edge_data))
+
+    
+
+
+    return prev_edge_list, vprop_dict

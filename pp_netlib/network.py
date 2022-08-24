@@ -114,25 +114,25 @@ class Network:
             else:
                 self.graph.add_edge_list(network_data) ## add edges
 
-        ########################
-        ####  PREV NETWORK  ####
-        ########################
-        if previous_network is not None:
-            prev_edges = []
-            if weights is not None:
-                extra_sources, extra_targets, extra_weights = process_previous_network(previous_network = previous_network, adding_qq_dists = adding_qq_dists, old_ids = old_ids, previous_pkl = previous_pkl, vertex_labels = vertex_labels, weights = (weights is not None), use_gpu = use_gpu)
-                for (src, dest, weight) in zip(extra_sources, extra_targets, extra_weights):
-                        prev_edges.append((src, dest, weight))
+        # ########################
+        # ####  PREV NETWORK  ####
+        # ########################
+        # if previous_network is not None:
+        #     prev_edges = []
+        #     if weights is not None:
+        #         extra_sources, extra_targets, extra_weights = process_previous_network(previous_network = previous_network, adding_qq_dists = adding_qq_dists, old_ids = old_ids, previous_pkl = previous_pkl, vertex_labels = vertex_labels, weights = (weights is not None), use_gpu = use_gpu)
+        #         for (src, dest, weight) in zip(extra_sources, extra_targets, extra_weights):
+        #                 prev_edges.append((src, dest, weight))
 
-            else:
-                extra_sources, extra_targets = process_previous_network(previous_network = previous_network, adding_qq_dists = adding_qq_dists, old_ids = old_ids, previous_pkl = previous_pkl, vertex_labels = vertex_labels, weights = (weights is not None), use_gpu = use_gpu)
-                for (src, dest, weight) in zip(extra_sources, extra_targets):
-                        prev_edges.append((src, dest))
+        #     else:
+        #         extra_sources, extra_targets = process_previous_network(previous_network = previous_network, adding_qq_dists = adding_qq_dists, old_ids = old_ids, previous_pkl = previous_pkl, vertex_labels = vertex_labels, weights = (weights is not None), use_gpu = use_gpu)
+        #         for (src, dest, weight) in zip(extra_sources, extra_targets):
+        #                 prev_edges.append((src, dest))
 
 
-            self.graph.add_edge_list(prev_edges) ## add previous edge list to newly made graph
+        #     self.graph.add_edge_list(prev_edges) ## add previous edge list to newly made graph
 
-            self.edges = [edge for edge in self.graph.edges()]
+        #     self.edges = [edge for edge in self.graph.edges()]
 
 
         ################################
