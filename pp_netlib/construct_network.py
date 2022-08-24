@@ -10,7 +10,7 @@ from .utils import *
 from .load_network import *
 from .indices_refs_clusters import *
 
-import poppunk_refine
+#import poppunk_refine
 
 def get_cugraph_triangles(graph):
     """Counts the number of triangles in a cugraph
