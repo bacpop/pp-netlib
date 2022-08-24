@@ -94,6 +94,7 @@ def gt_test_from_list(graph, data_list, network, weights):
         print("gt_test_from_list passed.")
     except AssertionError as ae:
         print("gt_test_from_list failed.")
+        raise ae
 
 
 def gt_test_from_sparse_matrix(weighted_graph, data_matrix, weighted_network):
@@ -112,6 +113,7 @@ def gt_test_from_sparse_matrix(weighted_graph, data_matrix, weighted_network):
         print("gt_test_from_sparse_matrix passed.")
     except:
         print("gt_test_from_sparse_matrix failed.")
+        raise ae
     
 
 if __name__ == "__main__":
