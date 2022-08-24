@@ -111,7 +111,7 @@ def gt_test_from_sparse_matrix(weighted_graph, data_matrix, weighted_network):
         assert weighted_edges == test_weighted_edges
         assert ref_weights == test_weights
         print("gt_test_from_sparse_matrix passed.")
-    except:
+    except AssertionError as ae:
         print("gt_test_from_sparse_matrix failed.")
         raise ae
     
