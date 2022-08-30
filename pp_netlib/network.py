@@ -1,17 +1,8 @@
-## internal imports
-# from .utils import *
-# from .cliques import *
-# from .vertices import *
-# from .load_network import *
-# from .indices_refs_clusters import *
-# from .construct_network import *
-
 import os, sys
 import numpy as np
 import pandas as pd
 import scipy
 import graph_tool.all as gt
-import pickle
 
 
 class Network:
@@ -23,7 +14,7 @@ class Network:
             query_list (list): List of sequence names/identifiers (names/identifiers) (TODO not used/necessary?)
             outdir (str): Path to output directory where graph files will be stored. Defaults to "./" (i.e. working directory) (TODO not used currently)
             backend (str, optional): Which graphing module to use. Can be specified here (valid options: "GT", "NX", "CG") or as an environment variable. (TODO)
-            use_gpu (bool, optional): Whether to use GPU and GPU python modules. Defaults to False. 
+            use_gpu (bool, optional): Whether to use GPU and GPU python modules. Defaults to False.
                                       If set to True and if ImportErrors are raised due to missing moduiles, will revert to False.
 
         Usage:
@@ -33,7 +24,7 @@ class Network:
 
             samples_list = ["sample1", "sample2", "sample3"]
 
-            #initialise a graph object, supplying three labels, outdir as Desktop, 
+            #initialise a graph object, supplying three labels, outdir as Desktop,
             # graphing module as graph-tool, and not using gpu and related modules
             example_graph = Network(ref_list = samples_list, outdir = "/Users/user/Desktop", backend = "GT", use_gpu = False)
 
@@ -42,11 +33,11 @@ class Network:
             example_graph.save(*save_args) ## save your graph to file in outdir
             ```
 
-            Graphing backend can alternatively be set as follows: TODO: To be discussed
+            Graphing backend can alternatively be set as follows: (TODO To be discussed)
             ```
             os.environ["GRAPH_BACKEND"] = "GT" ## inside of your_script.py or in interactive python terminal
 
-            *OR* 
+            *OR*
 
             export GRAPH_BACKEND=GT ## inside bash/shell terminal/environment
         """
@@ -80,15 +71,55 @@ class Network:
         """Method called on Network object. Constructs a graph using either graph-tool, networkx (TODO), or cugraph(TODO)
 
         Args:
-            network_data (dataframe OR edge list OR sparse coordinate matrix): Data containing record of edges in the graph. Defaults to None.
-            adding_qq_dists (bool, optional): _description_. Defaults to False.
-            old_ids (_type_, optional): _description_. Defaults to None.
-            previous_pkl (_type_, optional): _description_. Defaults to None.
+            network_data (dataframe OR edge list OR sparse coordinate matrix): Data containing record of edges in the graph.
+            weights (list, optional): List of weights associated with edges in network_data.
+                                      Weights must be in the same order as edges in network_data. Defaults to None.
+
+        This method is called on a Network object and produces a graph populated with edges.
+
+        network_data can be a dataframe, sparse matrix, or a list of tuples where each tuple contains source and destination node indices.
+        The following data generate identical graphs:
+        ## Edge List
+        ```
+        >> edge_list
+        [(0, 1), (1, 2), (2, 3), (3, 4), (4, 0)]
+        ```
+
+        ## Dataframe
+        >> edge_df
+        ```
+        ## column [0] is source nodes
+        ## column [1] is destination nodes
+            0   1
+        0   0   1
+        1   1   2
+        2   2   3
+        3   3   4
+        4   4   0
+        ```
+
+        ## Sparse matrix
+        >> edge_matrix
+        ```
+        (0, 1)	0.1
+        (1, 2)	0.1
+        (2, 3)	0.5
+        (3, 4)	0.7
+        (4, 0)	0.2
+
+        ## the above matrix as a numpy array for reference
+        >> edge_matrix.toarray()
+        [[0.0  0.1 0.0  0.0  0.0 ]
+        [0.0  0.0  0.1 0.0  0.0 ]
+        [0.0  0.0  0.0  0.5 0.0 ]
+        [0.0  0.0  0.0  0.0  0.7]
+        [0.2 0.0  0.0  0.0  0.0 ]]
+        ```
         """
         ########################
         ####     INITIAL    ####
         ########################
-        
+
         # Check GPU library use
         use_gpu = self.use_gpu
 
@@ -111,7 +142,7 @@ class Network:
             #     network_data = cudf.from_pandas(network_data) ## convert to cudf if use_gpu
             ## add column names
             network_data.columns = ["source", "destination"]
-            
+
             self.graph.add_vertex(len(network_data)) ## add vertices
 
             ## add weights column if weights provided as list (add error catching?)
@@ -148,14 +179,14 @@ class Network:
 
             if weights is not None:
                 weighted_edges = []
-                
+
                 for i in range(len(network_data)):
                     weighted_edges.append(network_data[i] + (weights[i],))
-                
+
                 eweight = self.graph.new_ep("float")
                 self.graph.add_edge_list(weighted_edges, eprops = [eweight]) ## add weighted edges
                 self.graph.edge_properties["weight"] = eweight
-            
+
             else:
                 self.graph.add_edge_list(network_data) ## add edges
 
@@ -164,6 +195,7 @@ class Network:
         for i in range(len([v for v in self.graph.vertices()])):
             v_name_prop[self.graph.vertex(i)] = vertex_labels[i]
 
+        ## keeping this section here for now; might be useful in add_to_network method
         # ########################
         # ####  PREV NETWORK  ####
         # ########################
