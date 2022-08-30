@@ -45,9 +45,9 @@ class Network:
         self.query_list = query_list
         self.outdir = outdir
         if backend is None:
-            self.backend = os.getenv("GRAPH_BACKEND")
+            self.backend = os.getenv("GRAPH_BACKEND") ## read os env variable "GRAPH_BACKEND"
         else:
-            self.backend = backend ## read os env variable "GRAPH_BACKEND"
+            self.backend = backend ## else use backend if specified
         self.use_gpu = use_gpu
         self.graph = None
 
