@@ -5,7 +5,7 @@ import scipy
 import graph_tool.all as gt
 import networkx as nx
 
-from pp_netlib.functions import construct_with_graphtool, construct_with_networkx
+from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, summarise
 
 
 class Network:
@@ -172,47 +172,33 @@ class Network:
         #prune_cliques() ###TODO populate this function call with arguments
         return
 
-    def summarize(self, summary_file_prefix):
-        """Wrapper function for printing network information
-
-        ## DEPENDS ON Fns: {.:[network_summary]}
+    def get_summary(self, summary_file_prefix = None):
+        """Method called on initialised and populated Network object. Prints summary of network properties.
 
         Args:
-            graph (graph)
-                List of reference sequence labels
-            betweenness_sample (int)
-                Number of sequences per component used to estimate betweenness using
-                a GPU. Smaller numbers are faster but less precise [default = 100]
-            use_gpu (bool)
-                Whether to use GPUs for network construction
+            summary_file_prefix (str, optional): File name of summary file to which graph property summaries should be written.
+            Defaults to None. If None, no summary file is written.
+
+        Raises:
+            RuntimeError: RuntimeError raised if no graph initialised.
         """
         # print some summaries
         if not self.graph:
-            raise RuntimeError("Graph not set")
-        
-        # (metrics, scores) = network_summary(self.graph, betweenness_sample = 100, use_gpu = self.use_gpu)
+            raise RuntimeError("Graph not found.")
 
-        # summary_contents = ("Network summary:\n" + "\n".join(["\tComponents\t\t\t\t" + str(metrics[0]),
-        #                                             "\tDensity\t\t\t\t\t" + "{:.4f}".format(metrics[1]),
-        #                                             "\tTransitivity\t\t\t\t" + "{:.4f}".format(metrics[2]),
-        #                                             "\tMean betweenness\t\t\t" + "{:.4f}".format(metrics[3]),
-        #                                             "\tWeighted-mean betweenness\t\t" + "{:.4f}".format(metrics[4]),
-        #                                             "\tScore\t\t\t\t\t" + "{:.4f}".format(scores[0]),
-        #                                             "\tScore (w/ betweenness)\t\t\t" + "{:.4f}".format(scores[1]),
-        #                                             "\tScore (w/ weighted-betweenness)\t\t" + "{:.4f}".format(scores[2])])
-        #                                             + "\n")
-        # sys.stderr.write(summary_contents)
-        # summary_file_name = os.path.join(self.outdir, (str(summary_file_prefix) + ".txt"))
+        summary_contents = summarise(self.graph, self.backend)
 
-        # #################################
-        # #   extra little thing to       #
-        # #  write summary to plain text  #
-        # #################################
+        sys.stderr.write(summary_contents)
 
-        # with open(summary_file_name, "w") as summary:
-        #     summary.write(summary_contents)
-        # summary.close()
-        return
+         #################################
+        #  write summary to plain text  #
+        #################################
+        if summary_file_prefix is not None:
+            summary_file_name = os.path.join(self.outdir, (str(summary_file_prefix) + ".txt"))
+
+            with open(summary_file_name, "w") as summary:
+                summary.write(summary_contents)
+            summary.close()
 
     def visualize(self):
         # code for calling viz functions

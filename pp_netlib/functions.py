@@ -2,6 +2,7 @@
 ####   .CONSTRUCT   ####
 ########################
 import scipy
+import numpy as np
 import pandas as pd
 import graph_tool.all as gt
 import networkx as nx
@@ -28,7 +29,7 @@ def construct_with_graphtool(network_data, vertex_labels, use_gpu, weights = Non
         ## add column names
         network_data.columns = ["source", "destination"]
 
-        graph.add_vertex(len(network_data)) ## add vertices
+        graph.add_vertex(len(vertex_labels)) ## add vertices
 
         ## add weights column if weights provided as list (add error catching?)
         if weights is not None:
@@ -51,7 +52,7 @@ def construct_with_graphtool(network_data, vertex_labels, use_gpu, weights = Non
         graph_data_df["destination"] =  network_data.col
         graph_data_df["weights"] = network_data.data
 
-        graph.add_vertex(len(graph_data_df)) ## add vertices
+        graph.add_vertex(len(vertex_labels)) ## add vertices
         eweight = graph.new_ep("float")
         graph.add_edge_list(list(map(tuple, graph_data_df.values)), eprops = [eweight]) ## add weighted edges
         graph.edge_properties["weight"] = eweight
@@ -60,7 +61,7 @@ def construct_with_graphtool(network_data, vertex_labels, use_gpu, weights = Non
     ####   LIST INPUT   ####
     ########################
     elif isinstance(network_data, list):
-        graph.add_vertex(len(network_data)) ## add vertices
+        graph.add_vertex(len(vertex_labels)) ## add vertices
 
         if weights is not None:
             weighted_edges = []
@@ -122,3 +123,60 @@ def construct_with_networkx(network_data, vertex_labels, use_gpu, weights = None
             graph.add_edges_from(network_data)
 
     return graph
+
+########################
+####   .SUMMARISE   ####
+########################
+def summarise(graph, backend):
+
+    if backend == "GT":
+        component_assignments, component_frequencies = gt.label_components(graph)
+        components = len(component_frequencies)
+        density = len(list(graph.edges()))/(0.5 * len(list(graph.vertices())) * (len(list(graph.vertices())) - 1))
+        transitivity = gt.global_clustering(graph)[0]
+
+        mean_bt = 0
+        weighted_mean_bt = 0
+        betweenness = []
+        sizes = []
+        for component, size in enumerate(component_frequencies):
+            if size > 3:
+                vfilt = component_assignments.a == component
+                subgraph = gt.GraphView(graph, vfilt=vfilt)
+                betweenness.append(max(gt.betweenness(subgraph, norm = True)[0].a))
+                sizes.append(size)
+
+        if len(betweenness) > 1:
+            mean_bt = np.mean(betweenness)
+            weighted_mean_bt = np.average(betweenness, weights=sizes)
+        elif len(betweenness) == 1:
+            mean_bt = betweenness[0]
+            weighted_mean_bt = betweenness[0]
+
+    elif backend == "NX":
+        components = nx.number_connected_components(graph)
+        print(components)
+        density = nx.density(graph)
+        transitivity = nx.transitivity(graph)
+
+        betweenness = []
+        sizes = []
+
+        mean_bt = 0 #TODO
+        weighted_mean_bt = 0 #TODO
+
+    metrics = [components, density, transitivity, mean_bt, weighted_mean_bt]
+    base_score = transitivity * (1 - density)
+    scores = [base_score, base_score * (1 - metrics[3]), base_score * (1 - metrics[4])]
+
+    summary_contents = ("Network summary:\n" + "\n".join(["\tComponents\t\t\t\t" + str(metrics[0]),
+                                                    "\tDensity\t\t\t\t\t" + "{:.4f}".format(metrics[1]),
+                                                    "\tTransitivity\t\t\t\t" + "{:.4f}".format(metrics[2]),
+                                                    "\tMean betweenness\t\t\t" + "{:.4f}".format(metrics[3]),
+                                                    "\tWeighted-mean betweenness\t\t" + "{:.4f}".format(metrics[4]),
+                                                    "\tScore\t\t\t\t\t" + "{:.4f}".format(scores[0]),
+                                                    "\tScore (w/ betweenness)\t\t\t" + "{:.4f}".format(scores[1]),
+                                                    "\tScore (w/ weighted-betweenness)\t\t" + "{:.4f}".format(scores[2])])
+                                                    + "\n")
+
+    return summary_contents
