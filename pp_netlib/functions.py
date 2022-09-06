@@ -99,7 +99,7 @@ def construct_with_networkx(network_data, vertex_labels, use_gpu, weights = None
         network_data.columns = ["source", "destination"]
         if weights is not None:
             network_data["weights"] = weights
-            for i in range(len(vertex_labels)):
+            for i in range(len(network_data)):
                 graph.add_edge(network_data["source"][i], network_data["destination"][i], weight=network_data["weights"][i])
         else:
             graph.add_edges_from(network_data.values)
@@ -108,7 +108,7 @@ def construct_with_networkx(network_data, vertex_labels, use_gpu, weights = None
     #### SPARSE MAT INPUT ####
     ##########################
     elif isinstance(network_data, scipy.sparse.coo_matrix):
-        for i in range(len(vertex_labels)):
+        for i in range(len(network_data.row[i])):
             graph.add_edge(network_data.row[i], network_data.col[i], weight=network_data.data[i])
 
     ########################
@@ -117,7 +117,7 @@ def construct_with_networkx(network_data, vertex_labels, use_gpu, weights = None
     elif isinstance(network_data, list):
         if weights is not None:
             src, dest = zip(*network_data)
-            for i in range(len(vertex_labels)):
+            for i in range(len(network_data)):
                 graph.add_edge(src[i], dest[i], weight=weights[i])
         else:
             graph.add_edges_from(network_data)
@@ -155,15 +155,23 @@ def summarise(graph, backend):
 
     elif backend == "NX":
         components = nx.number_connected_components(graph)
-        print(components)
         density = nx.density(graph)
         transitivity = nx.transitivity(graph)
 
         betweenness = []
         sizes = []
+        subgraphs = [graph.subgraph(c).copy() for c in nx.connected_components(graph)]
+        for subgraph in subgraphs:
+            betweenness.append(max((nx.betweenness_centrality(subgraph)).values()))
+            sizes.append(len(subgraph))
 
-        mean_bt = 0 #TODO
-        weighted_mean_bt = 0 #TODO
+        print("sizes=", sizes)
+        if len(betweenness) > 1:
+            mean_bt = np.mean(betweenness)
+            weighted_mean_bt = np.average(betweenness, weights=sizes)
+        elif len(betweenness) == 1:
+            mean_bt = betweenness[0]
+            weighted_mean_bt = betweenness[0]
 
     metrics = [components, density, transitivity, mean_bt, weighted_mean_bt]
     base_score = transitivity * (1 - density)
