@@ -1,128 +1,224 @@
-## internal imports
-# from .utils import *
-# from .cliques import *
-# from .vertices import *
-# from .load_network import *
-# from .indices_refs_clusters import *
-# from .construct_network import *
-
 import os, sys
 import numpy as np
 import pandas as pd
+import scipy
 import graph_tool.all as gt
-from pp_netlib.cliques import prune_cliques
-
-from pp_netlib.construct_network import construct_network_from_assignments, convert_data_to_df, initial_graph_properties, network_summary, process_previous_network
-from pp_netlib.indices_refs_clusters import add_self_loop
 
 
 class Network:
-    def __init__(self, ref_list, query_list, assignments, outdir, model_type, use_gpu = False):
+    def __init__(self, ref_list, query_list = None, outdir = "./", backend = None, use_gpu = False):
+        """Initialises a graph object (based on graph-tool, networkx (TODO), or cugraph (TODO)). Produces a Network object.
+
+        Args:
+            ref_list (list): List of sequence names/identifiers (names/identifiers should be strings) which will be vertices in the graph
+            query_list (list): List of sequence names/identifiers (names/identifiers) (TODO not used/necessary?)
+            outdir (str): Path to output directory where graph files will be stored. Defaults to "./" (i.e. working directory) (TODO not used currently)
+            backend (str, optional): Which graphing module to use. Can be specified here (valid options: "GT", "NX", "CG") or as an environment variable. (TODO)
+            use_gpu (bool, optional): Whether to use GPU and GPU python modules. Defaults to False.
+                                      If set to True and if ImportErrors are raised due to missing moduiles, will revert to False.
+
+        Usage:
+        your_script.py or interactive python terminal
+            ```
+            from pp_netlib.network import Network
+
+            samples_list = ["sample1", "sample2", "sample3"]
+
+            #initialise a graph object, supplying three labels, outdir as Desktop,
+            # graphing module as graph-tool, and not using gpu and related modules
+            example_graph = Network(ref_list = samples_list, outdir = "/Users/user/Desktop", backend = "GT", use_gpu = False)
+
+
+            example_graph.construct(*construct_args) ## call the construct method to populate graph object with your data
+            example_graph.save(*save_args) ## save your graph to file in outdir
+            ```
+
+            Graphing backend can alternatively be set as follows: (TODO To be discussed)
+            ```
+            os.environ["GRAPH_BACKEND"] = "GT" ## inside of your_script.py or in interactive python terminal
+
+            *OR*
+
+            export GRAPH_BACKEND=GT ## inside bash/shell terminal/environment
+        """
         self.ref_list = ref_list
         self.query_list = query_list
-        self.assignments = assignments
         self.outdir = outdir
+        if backend is None:
+            self.backend = os.getenv("GRAPH_BACKEND") ## read os env variable "GRAPH_BACKEND"
+        else:
+            self.backend = backend ## else use backend if specified
         self.use_gpu = use_gpu
-        self.model_type = model_type
         self.graph = None
 
         if use_gpu:
-            try:
-                import cupyx
-                import cugraph
-                import cudf
-                import cupy as cp
-                from numba import cuda
-                import rmm
-                use_gpu = True
-            except ImportError or ModuleNotFoundError as e:
-                sys.stderr.write("Unable to load GPU libraries; using CPU libraries instead\n")
-                use_gpu = False
+            raise NotImplementedError("GPU graph not yet implemented")
+            use_gpu = False
+            # try:
+            #     import cupyx
+            #     import cugraph
+            #     import cudf
+            #     import cupy as cp
+            #     from numba import cuda
+            #     import rmm
+            #     use_gpu = True
+            # except ImportError or ModuleNotFoundError as e:
+            #     sys.stderr.write("Unable to load GPU libraries; using CPU libraries instead\n")
+            #     use_gpu = False
 
-        print(ref_list, assignments, outdir, use_gpu, model_type)
 
-    def construct(self, network_data, weights = None, previous_network = None, adding_qq_dists = False, old_ids = None, previous_pkl = None): ## construct from edge_list
+    def construct(self, network_data, weights = None): #, previous_network = None, adding_qq_dists = False, old_ids = None, previous_pkl = None):
+        """Method called on Network object. Constructs a graph using either graph-tool, networkx (TODO), or cugraph(TODO)
+
+        Args:
+            network_data (dataframe OR edge list OR sparse coordinate matrix): Data containing record of edges in the graph.
+            weights (list, optional): List of weights associated with edges in network_data.
+                                      Weights must be in the same order as edges in network_data. Defaults to None.
+
+        This method is called on a Network object and produces a graph populated with edges.
+
+        network_data can be a dataframe, sparse matrix, or a list of tuples where each tuple contains source and destination node indices.
+        The following data generate identical graphs:
+        ## Edge List
+        ```
+        >> edge_list
+        [(0, 1), (1, 2), (2, 3), (3, 4), (4, 0)]
+        ```
+
+        ## Dataframe
+        >> edge_df
+        ```
+        ## column [0] is source nodes
+        ## column [1] is destination nodes
+            0   1
+        0   0   1
+        1   1   2
+        2   2   3
+        3   3   4
+        4   4   0
+        ```
+
+        ## Sparse matrix
+        >> edge_matrix
+        ```
+        (0, 1)	0.1
+        (1, 2)	0.1
+        (2, 3)	0.5
+        (3, 4)	0.7
+        (4, 0)	0.2
+
+        ## the above matrix as a numpy array for reference
+        >> edge_matrix.toarray()
+        [[0.0  0.1 0.0  0.0  0.0 ]
+        [0.0  0.0  0.1 0.0  0.0 ]
+        [0.0  0.0  0.0  0.5 0.0 ]
+        [0.0  0.0  0.0  0.0  0.7]
+        [0.2 0.0  0.0  0.0  0.0 ]]
+        ```
+        """
+        ########################
+        ####     INITIAL    ####
+        ########################
+
         # Check GPU library use
         use_gpu = self.use_gpu
 
-        if isinstance(network_data, np.ndarray):
-            construct_network_from_assignments(ref_list, ref_list, assignments)
-
         # data structures
-        vertex_labels, self_comparison = initial_graph_properties(self.ref_list, self.query_list)
+        if self.ref_list != self.query_list:
+            vertex_labels = self.ref_list + self.query_list
+            self_comparison = False
+        else:
+            vertex_labels = self.ref_list
+            self_comparison = True
 
-        network_data_df = convert_data_to_df(network_data, weights, use_gpu)
+        # initialise a graph object
+        self.graph = gt.Graph(directed = False) ## initialise graph_tool graph object
 
-        ################################
-        #   TODO TODO TODO TODO TODO   #
-        #   TODO TODO TODO TODO TODO   #
-        ################################
+        ########################
+        ####    DF INPUT    ####
+        ########################
+        if isinstance(network_data, pd.DataFrame):
+            # if use_gpu:
+            #     network_data = cudf.from_pandas(network_data) ## convert to cudf if use_gpu
+            ## add column names
+            network_data.columns = ["source", "destination"]
 
-        # Create new network
-        if not use_gpu:
+            self.graph.add_vertex(len(network_data)) ## add vertices
+
+            ## add weights column if weights provided as list (add error catching?)
             if weights is not None:
-                edges = list(network_data_df.itertuples(index=False, name = None))
-                # Load previous network
-                if previous_network is not None:
-                    extra_sources, extra_targets, extra_weights = process_previous_network(previous_network = previous_network, adding_qq_dists = adding_qq_dists, old_ids = old_ids, previous_pkl = previous_pkl, vertex_labels = vertex_labels, weights = (weights is not None), use_gpu = use_gpu)
-                    for (src, dest, weight) in zip(extra_sources, extra_targets, extra_weights):
-                            edges.append((src, dest, weight))
-            else:
-                edges = list(network_data_df.itertuples(index=False, name = None))
-                if previous_network is not None:
-                    for (src, dest) in zip(extra_sources, extra_targets):
-                        edges.append((src, dest))
-        
-            self.graph = gt.Graph(directed = False)
-            self.graph.add_vertex(len(vertex_labels))
-            if weights is not None:
+                network_data["weights"] = weights
                 eweight = self.graph.new_ep("float")
-                self.graph.add_edge_list(edges, eprops = [eweight])
+                self.graph.add_edge_list(network_data.values, eprops = [eweight]) ## add weighted edges
                 self.graph.edge_properties["weight"] = eweight
             else:
-                self.graph.add_edge_list(edges)
-            
-        else:
-            # benchmarking concurs with https://stackoverflow.com/questions/55922162/recommended-cudf-dataframe-construction
-            if len(network_data_df) > 1:
-                edge_array = cp.array(network_data_df, dtype = np.int32)
-                edge_gpu_matrix = cuda.to_device(edge_array)
-                gpu_graph_df = cudf.DataFrame(edge_gpu_matrix, columns = ["source","destination"])
-            else:
-                # Cannot generate an array when one edge
-                gpu_graph_df = cudf.DataFrame(columns = ["source","destination"])
-                gpu_graph_df["source"] = [network_data_df[0][0]]
-                gpu_graph_df["destination"] = [network_data_df[0][1]]
+                self.graph.add_edge_list(network_data.values) ## add edges
+
+        ##########################
+        #### SPARSE MAT INPUT ####
+        ##########################
+        elif isinstance(network_data, scipy.sparse.coo_matrix):
+            if not use_gpu:
+                graph_data_df = pd.DataFrame()
+            # else:
+            #     graph_data_df = cudf.DataFrame()
+            graph_data_df["source"] = network_data.row
+            graph_data_df["destination"] =  network_data.col
+            graph_data_df["weights"] = network_data.data
+
+            self.graph.add_vertex(len(graph_data_df)) ## add vertices
+            eweight = self.graph.new_ep("float")
+            self.graph.add_edge_list(list(map(tuple, graph_data_df.values)), eprops = [eweight]) ## add weighted edges
+            self.graph.edge_properties["weight"] = eweight
+
+        ########################
+        ####   LIST INPUT   ####
+        ########################
+        elif isinstance(network_data, list):
+            self.graph.add_vertex(len(network_data)) ## add vertices
 
             if weights is not None:
-                gpu_graph_df["weights"] = weights
+                weighted_edges = []
 
-            if previous_network is not None:
-                G_extra_df = cudf.DataFrame()
-                G_extra_df["source"] = extra_sources
-                G_extra_df["destination"] = extra_targets
-                if extra_weights is not None:
-                    G_extra_df["weights"] = extra_weights
-                gpu_graph_df = cudf.concat([gpu_graph_df,G_extra_df], ignore_index = True)
+                for i in range(len(network_data)):
+                    weighted_edges.append(network_data[i] + (weights[i],))
 
-            # direct conversion
-            # ensure the highest-integer node is included in the edge list
-            # by adding a self-loop if necessary; see https://github.com/rapidsai/cugraph/issues/1206
-            max_in_vertex_labels = len(vertex_labels)-1
-            use_weights = False
-            if weights:
-                use_weights = True
-            self.graph = add_self_loop(gpu_graph_df, max_in_vertex_labels, weights = use_weights, renumber = False)
-                
-        return self.graph
+                eweight = self.graph.new_ep("float")
+                self.graph.add_edge_list(weighted_edges, eprops = [eweight]) ## add weighted edges
+                self.graph.edge_properties["weight"] = eweight
 
-        ################################
-        #   TODO TODO TODO TODO TODO   #
-        #   TODO TODO TODO TODO TODO   #
-        ################################
+            else:
+                self.graph.add_edge_list(network_data) ## add edges
+
+        v_name_prop = self.graph.new_vp("string")
+        self.graph.vertex_properties["id"] = v_name_prop
+        for i in range(len([v for v in self.graph.vertices()])):
+            v_name_prop[self.graph.vertex(i)] = vertex_labels[i]
+
+        ## keeping this section here for now; might be useful in add_to_network method
+        # ########################
+        # ####  PREV NETWORK  ####
+        # ########################
+        # if previous_network is not None:
+        #     prev_edges = []
+        #     if weights is not None:
+        #         extra_sources, extra_targets, extra_weights = process_previous_network(previous_network = previous_network, adding_qq_dists = adding_qq_dists, old_ids = old_ids, previous_pkl = previous_pkl, vertex_labels = vertex_labels, weights = (weights is not None), use_gpu = use_gpu)
+        #         for (src, dest, weight) in zip(extra_sources, extra_targets, extra_weights):
+        #                 prev_edges.append((src, dest, weight))
+
+        #     else:
+        #         extra_sources, extra_targets = process_previous_network(previous_network = previous_network, adding_qq_dists = adding_qq_dists, old_ids = old_ids, previous_pkl = previous_pkl, vertex_labels = vertex_labels, weights = (weights is not None), use_gpu = use_gpu)
+        #         for (src, dest, weight) in zip(extra_sources, extra_targets):
+        #                 prev_edges.append((src, dest))
+
+
+        #     self.graph.add_edge_list(prev_edges) ## add previous edge list to newly made graph
+
+        #     self.edges = [edge for edge in self.graph.edges()]
+
 
     def prune(self):
-        prune_cliques() ###TODO populate this functino call with arguments
+        #prune_cliques() ###TODO populate this function call with arguments
         return
 
     def summarize(self, summary_file_prefix):
@@ -143,28 +239,28 @@ class Network:
         if not self.graph:
             raise RuntimeError("Graph not set")
         
-        (metrics, scores) = network_summary(self.graph, betweenness_sample = 100, use_gpu = self.use_gpu)
+        # (metrics, scores) = network_summary(self.graph, betweenness_sample = 100, use_gpu = self.use_gpu)
 
-        summary_contents = ("Network summary:\n" + "\n".join(["\tComponents\t\t\t\t" + str(metrics[0]),
-                                                    "\tDensity\t\t\t\t\t" + "{:.4f}".format(metrics[1]),
-                                                    "\tTransitivity\t\t\t\t" + "{:.4f}".format(metrics[2]),
-                                                    "\tMean betweenness\t\t\t" + "{:.4f}".format(metrics[3]),
-                                                    "\tWeighted-mean betweenness\t\t" + "{:.4f}".format(metrics[4]),
-                                                    "\tScore\t\t\t\t\t" + "{:.4f}".format(scores[0]),
-                                                    "\tScore (w/ betweenness)\t\t\t" + "{:.4f}".format(scores[1]),
-                                                    "\tScore (w/ weighted-betweenness)\t\t" + "{:.4f}".format(scores[2])])
-                                                    + "\n")
-        sys.stderr.write(summary_contents)
-        summary_file_name = os.path.join(self.outdir, (str(summary_file_prefix) + ".txt"))
+        # summary_contents = ("Network summary:\n" + "\n".join(["\tComponents\t\t\t\t" + str(metrics[0]),
+        #                                             "\tDensity\t\t\t\t\t" + "{:.4f}".format(metrics[1]),
+        #                                             "\tTransitivity\t\t\t\t" + "{:.4f}".format(metrics[2]),
+        #                                             "\tMean betweenness\t\t\t" + "{:.4f}".format(metrics[3]),
+        #                                             "\tWeighted-mean betweenness\t\t" + "{:.4f}".format(metrics[4]),
+        #                                             "\tScore\t\t\t\t\t" + "{:.4f}".format(scores[0]),
+        #                                             "\tScore (w/ betweenness)\t\t\t" + "{:.4f}".format(scores[1]),
+        #                                             "\tScore (w/ weighted-betweenness)\t\t" + "{:.4f}".format(scores[2])])
+        #                                             + "\n")
+        # sys.stderr.write(summary_contents)
+        # summary_file_name = os.path.join(self.outdir, (str(summary_file_prefix) + ".txt"))
 
-        #################################
-        #   extra little thing to       #
-        #  write summary to plain text  #
-        #################################
+        # #################################
+        # #   extra little thing to       #
+        # #  write summary to plain text  #
+        # #################################
 
-        with open(summary_file_name, "w") as summary:
-            summary.write(summary_contents)
-        summary.close()
+        # with open(summary_file_name, "w") as summary:
+        #     summary.write(summary_contents)
+        # summary.close()
         return
 
     def visualize(self):
@@ -256,22 +352,3 @@ class Network:
                 self.graph.save(file_name + ".gt", fmt = "gt")
         else:
             self.graph.to_pandas_edgelist().to_csv(file_name + ".csv.gz", compression="gzip", index = False)
-
-
-# a = Network("refs_list", "assignments.npy", "/Home/Desktop/", "dbscan", True)
-
-# a.load_network()
-# a.construct()
-# a.prune()
-# a.summarize()
-# a.visualize()
-# a.convert("cugraph", "graphtool")
-# a.add_to_network("random_data_point")
-# a.save()
-
-ref_list = "tests/Mass_hdbscan.refs"
-assignments = np.load("tests/test_assignments.npy")
-
-test_graph = Network(ref_list, ref_list, assignments, "tests/test_construct", "hdbscan", use_gpu=False)
-
-test_graph.construct(assignments)
