@@ -108,7 +108,7 @@ def construct_with_networkx(network_data, vertex_labels, use_gpu, weights = None
     #### SPARSE MAT INPUT ####
     ##########################
     elif isinstance(network_data, scipy.sparse.coo_matrix):
-        for i in range(len(network_data.row[i])):
+        for i in range((network_data.shape[0])):
             graph.add_edge(network_data.row[i], network_data.col[i], weight=network_data.data[i])
 
     ########################
