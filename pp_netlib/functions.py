@@ -165,7 +165,6 @@ def summarise(graph, backend):
             betweenness.append(max((nx.betweenness_centrality(subgraph)).values()))
             sizes.append(len(subgraph))
 
-        print("sizes=", sizes)
         if len(betweenness) > 1:
             mean_bt = np.mean(betweenness)
             weighted_mean_bt = np.average(betweenness, weights=sizes)

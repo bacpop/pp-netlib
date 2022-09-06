@@ -1,4 +1,5 @@
 import os, sys
+from tkinter.messagebox import NO
 import numpy as np
 import pandas as pd
 import scipy
@@ -205,7 +206,7 @@ class Network:
         print("visualizing network")
         return #files associated with viz
 
-    def load_network(self, network_file):
+    def load_network(self, network_file, sep, vprops, epropss):
         """Load the network based on input options
        Returns the network as a graph-tool format graph, and sets
        the slope parameter of the passed model object.
@@ -222,23 +223,36 @@ class Network:
                 The loaded network
     """
         # Load the network from the specified file
+        file_name, file_extension = os.path.splitext('/path/to/somefile.ext')
+        if file_extension in [".gt", ".graphml", ".xml"]:
 
-        if not self.use_gpu:
-            genome_network = gt.load_graph(network_file)
-            sys.stderr.write("Network loaded: " + str(len(list(genome_network.vertices()))) + " samples\n")
-        else:
-            graph_df = cudf.read_csv(network_file, compression = "gzip")
-            if "src" in graph_df.columns:
-                graph_df.rename(columns={"src": "source", "dst": "destination"}, inplace=True)
-            genome_network = cugraph.Graph()
-            if "weights" in graph_df.columns:
-                graph_df = graph_df[["source", "destination", "weights"]]
-                genome_network.from_cudf_edgelist(graph_df, edge_attr = "weights", renumber = False)
-            else:
-                genome_network.from_cudf_edgelist(graph_df, renumber = False)
-            sys.stderr.write("Network loaded: " + str(genome_network.number_of_vertices()) + " samples\n")
+            if self.backend == "GT":
+                loaded_graph = gt.load_graph(network_file)
+            if self.backend == "NX":
+                loaded_graph = nx.read_graphml(network_file)
+        
+        self.loaded_graph = loaded_graph
 
-        return genome_network
+        if file_extension in [".csv", ".tsv", ".txt"]:
+            graph_data = pd.read_csv(network_file, sep = sep, header = None)
+        
+
+        # if not self.use_gpu:
+        #     genome_network = gt.load_graph(network_file)
+        #     sys.stderr.write("Network loaded: " + str(len(list(genome_network.vertices()))) + " samples\n")
+        # else:
+        #     graph_df = cudf.read_csv(network_file, compression = "gzip")
+        #     if "src" in graph_df.columns:
+        #         graph_df.rename(columns={"src": "source", "dst": "destination"}, inplace=True)
+        #     genome_network = cugraph.Graph()
+        #     if "weights" in graph_df.columns:
+        #         graph_df = graph_df[["source", "destination", "weights"]]
+        #         genome_network.from_cudf_edgelist(graph_df, edge_attr = "weights", renumber = False)
+        #     else:
+        #         genome_network.from_cudf_edgelist(graph_df, renumber = False)
+        #     sys.stderr.write("Network loaded: " + str(genome_network.number_of_vertices()) + " samples\n")
+
+        # return genome_network
 
     def add_to_network(self, datapoint):
         # calls functions which load a preexisting network, or work with a newly built one, and add data to it?
@@ -261,7 +275,7 @@ class Network:
         print(f"converting from {intial_format} to {target_format}")
         return
 
-    def save(self, prefix, suffix, use_graphml):
+    def save(self, outdir, file_name, file_format):
         """Save a network to disk
 
         ## DEPENDS ON Fns: {None}
@@ -269,7 +283,7 @@ class Network:
         Args:
         graph (network)
             Graph tool network
-        prefix (str)
+        oudir (str)
             Prefix for output file
         use_graphml (bool)
             Whether to output a graph-tool file
@@ -278,14 +292,27 @@ class Network:
             Whether graph is a cugraph or not
             [default = False]
         """
+    
+        if self.backend == "GT":
+            if file_format is None:
+                self.graph.save(os.path.join(outdir, file_name+".gt"))
+            elif file_format is not None:
+                if file_format not in [".gt", ".graphml"]:
+                    raise NotImplementedError("Supported file formats to save a graph-tools graph are .gt or .graphml")
+                else:
+                    self.graph.save(os.path.join(outdir, file_name+file_format))
 
-        file_name = prefix + "/" + os.path.basename(prefix)
-        if suffix is not None:
-            file_name = file_name + suffix
-        if not self.use_gpu:
-            if use_graphml:
-                self.graph.save(file_name + ".graphml", fmt = "graphml")
-            else:
-                self.graph.save(file_name + ".gt", fmt = "gt")
-        else:
-            self.graph.to_pandas_edgelist().to_csv(file_name + ".csv.gz", compression="gzip", index = False)
+        if self.backend == "NX":
+            nx.write_graphml(self.graph, os.path.join(outdir, file_name+"graphml"))
+
+
+        # file_name = outdir + "/" + prefix
+        # if suffix is not None:
+        #     file_name = file_name + suffix
+        # if not self.use_gpu:
+        #     if use_graphml:
+        #         self.graph.save(file_name + ".graphml", fmt = "graphml")
+        #     else:
+        #         self.graph.save(file_name + ".gt", fmt = "gt")
+        # else:
+        #     self.graph.to_pandas_edgelist().to_csv(file_name + ".csv.gz", compression="gzip", index = False)
