@@ -1,6 +1,4 @@
-from json import load
 import os, sys
-from tkinter.messagebox import NO
 import numpy as np
 import pandas as pd
 import scipy
@@ -278,22 +276,22 @@ class Network:
         print(f"converting from {intial_format} to {target_format}")
         return
 
-    def save(self, outdir, file_name, file_format):
+    def save(self, file_name, file_format):
         """Save graph to file.
 
         Args:
-            outdir (str/path): Absolute path to output directory where the graph file will be written
             file_name (str): Name to be given to the graph file
             file_format (str): File extenstion to be used with graph file
 
             Example:
             ```
-            graph.save("/path/to/outdir", "sample_graph", ".graphml")
+            graph.save("sample_graph", ".graphml")
             ```
 
         Raises:
-            NotImplementedError: If graph_tool is selected a sbackend,
+            NotImplementedError: If graph_tool is selected a backend,
         """
+        outdir = self.outdir
         if self.backend == "GT":
             if file_format is None:
                 self.graph.save(os.path.join(outdir, file_name+".gt"))
@@ -304,7 +302,7 @@ class Network:
                     self.graph.save(os.path.join(outdir, file_name+file_format))
 
         if self.backend == "NX":
-            nx.write_graphml(self.graph, os.path.join(outdir, file_name+"graphml"))
+            nx.write_graphml(self.graph, os.path.join(outdir, file_name+".graphml"))
 
 
         # file_name = outdir + "/" + prefix

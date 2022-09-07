@@ -202,3 +202,4 @@ def summarise(graph, backend):
                                                     + "\n")
 
     return summary_contents
+
