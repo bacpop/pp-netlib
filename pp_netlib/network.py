@@ -1,3 +1,4 @@
+from json import load
 import os, sys
 from tkinter.messagebox import NO
 import numpy as np
@@ -174,7 +175,7 @@ class Network:
         return
 
     def get_summary(self, summary_file_prefix = None):
-        """Method called on initialised and populated Network object. Prints summary of network properties.
+        """Method called on initialised and populated Network object. Prints summary of network properties to stderr and optionally to plain text file.
 
         Args:
             summary_file_prefix (str, optional): File name of summary file to which graph property summaries should be written.
@@ -206,35 +207,37 @@ class Network:
         print("visualizing network")
         return #files associated with viz
 
-    def load_network(self, network_file, sep, vprops, epropss):
-        """Load the network based on input options
-       Returns the network as a graph-tool format graph, and sets
-       the slope parameter of the passed model object.
+    def load_network(self, network_file):
+        """Load a premade graph from a network file. 
 
-       ## DEPENDS ON Fns: {none}
-
-       Args:
-            network_file (str)
-                Network file name
-            use_gpu (bool)
-                Use cugraph library to load graph
-       Returns:
-            genome_network (graph)
-                The loaded network
-    """
+        Args:
+            network_file (str/path): The file in which the prebuilt graph is stored. Must be a .gt file, .graphml file or .xml file.
+        """
         # Load the network from the specified file
-        file_name, file_extension = os.path.splitext('/path/to/somefile.ext')
-        if file_extension in [".gt", ".graphml", ".xml"]:
-
+        file_name, file_extension = os.path.splitext(network_file)
+        if file_extension in [".graphml", ".xml"]:
             if self.backend == "GT":
                 loaded_graph = gt.load_graph(network_file)
+                num_nodes = len(list(loaded_graph.vertices()))
+                num_edges = len(list(loaded_graph.edges()))
             if self.backend == "NX":
                 loaded_graph = nx.read_graphml(network_file)
+                num_nodes = len(loaded_graph.nodes())
+                num_edges = len(loaded_graph.edges())
+
+        if file_extension == ".gt":
+            loaded_graph = gt.load_graph(network_file)
+            num_nodes = len(list(loaded_graph.vertices()))
+            num_edges = len(list(loaded_graph.edges()))
+            if self.backend == "NX":
+                sys.stderr.write("Network file provided is in .gt format and will be loaded with graph_tool. Please convert it to a networkx graph if you'd like to manipulate or modify it.")
         
         self.loaded_graph = loaded_graph
+        sys.stderr.write(f"Loaded network with {num_nodes} nodes and {num_edges} edges.\n")
 
         if file_extension in [".csv", ".tsv", ".txt"]:
-            graph_data = pd.read_csv(network_file, sep = sep, header = None)
+            sys.stderr.write("The network file appears to be in tabular format, please load it as a dataframe and use the construct method to build a graph.\n")
+            sys.exit(1)
         
 
         # if not self.use_gpu:
@@ -254,9 +257,9 @@ class Network:
 
         # return genome_network
 
-    def add_to_network(self, datapoint):
+    def add_to_network(self, new_data):
         # calls functions which load a preexisting network, or work with a newly built one, and add data to it?
-        print(f"adding {datapoint} to network")
+        print(f"adding {new_data} to network")
         return
 
     def _convert(self, intial_format, target_format):
@@ -268,7 +271,7 @@ class Network:
 
 
         if target_format == "cugraph" and not self.use_gpu:
-            sys.stderr.write("You have asked for your gaph to be converted to cugraph format, but your system/environment seems to be missing gpu related imports. Converting anyway...")
+            sys.stderr.write("You have asked for your graph to be converted to cugraph format, but your system/environment seems to be missing gpu related imports. Converting anyway...")
 
         
 
@@ -276,23 +279,21 @@ class Network:
         return
 
     def save(self, outdir, file_name, file_format):
-        """Save a network to disk
-
-        ## DEPENDS ON Fns: {None}
+        """Save graph to file.
 
         Args:
-        graph (network)
-            Graph tool network
-        oudir (str)
-            Prefix for output file
-        use_graphml (bool)
-            Whether to output a graph-tool file
-            in graphml format
-        use_gpu (bool)
-            Whether graph is a cugraph or not
-            [default = False]
+            outdir (str/path): Absolute path to output directory where the graph file will be written
+            file_name (str): Name to be given to the graph file
+            file_format (str): File extenstion to be used with graph file
+
+            Example:
+            ```
+            graph.save("/path/to/outdir", "sample_graph", ".graphml")
+            ```
+
+        Raises:
+            NotImplementedError: If graph_tool is selected a sbackend,
         """
-    
         if self.backend == "GT":
             if file_format is None:
                 self.graph.save(os.path.join(outdir, file_name+".gt"))

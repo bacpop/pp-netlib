@@ -7,11 +7,12 @@ import pandas as pd
 import graph_tool.all as gt
 import networkx as nx
 
-def construct_with_graphtool(network_data, vertex_labels, use_gpu, weights = None):
+def construct_with_graphtool(network_data, vertex_labels, weights = None):
     """Construct a graph with graph-tool
 
     Args:
         network_data (dataframe OR edge list OR sparse coordinate matrix): Data containing record of edges in the graph.
+        vertex_labels (list): List of vertex/node labels to apply to graph vertices
         weights (list, optional): List of weights associated with edges in network_data.
                                       Weights must be in the same order as edges in network_data. Defaults to None.
 
@@ -24,9 +25,6 @@ def construct_with_graphtool(network_data, vertex_labels, use_gpu, weights = Non
     ####    DF INPUT    ####
     ########################
     if isinstance(network_data, pd.DataFrame):
-        # if use_gpu:
-        #     network_data = cudf.from_pandas(network_data) ## convert to cudf if use_gpu
-        ## add column names
         network_data.columns = ["source", "destination"]
 
         graph.add_vertex(len(vertex_labels)) ## add vertices
@@ -44,10 +42,7 @@ def construct_with_graphtool(network_data, vertex_labels, use_gpu, weights = Non
     #### SPARSE MAT INPUT ####
     ##########################
     elif isinstance(network_data, scipy.sparse.coo_matrix):
-        if not use_gpu:
-            graph_data_df = pd.DataFrame()
-        # else:
-        #     graph_data_df = cudf.DataFrame()
+        graph_data_df = pd.DataFrame()
         graph_data_df["source"] = network_data.row
         graph_data_df["destination"] =  network_data.col
         graph_data_df["weights"] = network_data.data
@@ -83,7 +78,18 @@ def construct_with_graphtool(network_data, vertex_labels, use_gpu, weights = Non
 
     return graph
 
-def construct_with_networkx(network_data, vertex_labels, use_gpu, weights = None):
+def construct_with_networkx(network_data, vertex_labels, weights = None):
+    """Construct a graph with networkx
+
+    Args:
+        network_data (dataframe OR edge list OR sparse coordinate matrix): Data containing record of edges in the graph.
+        vertex_labels (list): List of vertex/node labels to apply to graph vertices
+        weights (list, optional): List of weights associated with edges in network_data.
+                                      Weights must be in the same order as edges in network_data. Defaults to None.
+
+    Returns:
+        nx.Graph: Networkx graph object populated with network data
+    """
     ## initialise nx graph and add nodes
     graph = nx.Graph()
     graph.add_nodes_from(range(len(vertex_labels)))
@@ -128,6 +134,15 @@ def construct_with_networkx(network_data, vertex_labels, use_gpu, weights = None
 ####   .SUMMARISE   ####
 ########################
 def summarise(graph, backend):
+    """Get graph metrics and format into soutput string.
+
+    Args:
+        graph (Network object): The graph for which to obtain summary metrics
+        backend (str): The tool used to build graph ("GT", "NX", or "CG"(TODO))
+
+    Returns:
+        summary_contents (formatted str): Graph summary metrics formatted to print to stderr
+    """
 
     if backend == "GT":
         component_assignments, component_frequencies = gt.label_components(graph)
