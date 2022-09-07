@@ -144,9 +144,9 @@ class Network:
 
         # initialise a graph object
         if self.backend == "GT":
-            self.graph = construct_with_graphtool(network_data=network_data, vertex_labels=vertex_labels, use_gpu=use_gpu, weights=weights)
+            self.graph = construct_with_graphtool(network_data=network_data, vertex_labels=vertex_labels, weights=weights)
         elif self.backend == "NX":
-            self.graph = construct_with_networkx(network_data=network_data, vertex_labels=vertex_labels, use_gpu=use_gpu, weights=weights)
+            self.graph = construct_with_networkx(network_data=network_data, vertex_labels=vertex_labels, weights=weights)
 
         ## keeping this section here for now; might be useful in add_to_network method
         # ########################
