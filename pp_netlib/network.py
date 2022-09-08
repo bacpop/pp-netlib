@@ -2,8 +2,6 @@ import os, sys
 import numpy as np
 import pandas as pd
 import scipy
-# import graph_tool.all as gt
-# import networkx as nx
 
 from pp_netlib.functions import construct_with_graphtool, construct_with_networkx
 
