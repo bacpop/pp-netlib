@@ -41,8 +41,8 @@ Edge List
 ```
 
 Dataframe 
->> edge_df
 ```
+>> edge_df
 ##column [0] is source nodes
 ##column [1] is destination nodes
     0   1
@@ -54,8 +54,8 @@ Dataframe
 ```
 
 Sparse coordinate matrix
->> edge_matrix
 ```
+>> edge_matrix
 ##edge_matrix.row should return source nodes
 ##edge_matrix.col should return destination nodes
 ##edge_matrix.data should return weights
