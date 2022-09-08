@@ -2,8 +2,8 @@ import os, sys
 import numpy as np
 import pandas as pd
 import scipy
-import graph_tool.all as gt
-import networkx as nx
+# import graph_tool.all as gt
+# import networkx as nx
 
 from pp_netlib.functions import construct_with_graphtool, construct_with_networkx
 
@@ -53,6 +53,11 @@ class Network:
             self.backend = backend ## else use backend if specified
         self.use_gpu = use_gpu
         self.graph = None
+
+        if self.backend == "GT":
+            import graph_tool.all as gt
+        elif self.backend == "NX":
+            import networkx as nx
 
         if use_gpu:
             raise NotImplementedError("GPU graph not yet implemented")
@@ -142,9 +147,9 @@ class Network:
 
         # initialise a graph object
         if self.backend == "GT":
-            self.graph = construct_with_graphtool(network_data=network_data, vertex_labels=vertex_labels, use_gpu=use_gpu, weights=weights)
+            self.graph = construct_with_graphtool(network_data=network_data, vertex_labels=vertex_labels, weights=weights)
         elif self.backend == "NX":
-            self.graph = construct_with_networkx(network_data=network_data, vertex_labels=vertex_labels, use_gpu=use_gpu, weights=weights)
+            self.graph = construct_with_networkx(network_data=network_data, vertex_labels=vertex_labels, weights=weights)
 
         ## keeping this section here for now; might be useful in add_to_network method
         # ########################

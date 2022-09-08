@@ -3,10 +3,9 @@
 ########################
 import scipy
 import pandas as pd
-import graph_tool.all as gt
-import networkx as nx
 
-def construct_with_graphtool(network_data, vertex_labels, use_gpu, weights = None):
+def construct_with_graphtool(network_data, vertex_labels, weights = None):
+    import graph_tool.all as gt
     """Construct a graph with graph-tool
 
     Args:
@@ -28,7 +27,7 @@ def construct_with_graphtool(network_data, vertex_labels, use_gpu, weights = Non
         ## add column names
         network_data.columns = ["source", "destination"]
 
-        graph.add_vertex(len(network_data)) ## add vertices
+        graph.add_vertex(len(vertex_labels)) ## add vertices
 
         ## add weights column if weights provided as list (add error catching?)
         if weights is not None:
@@ -43,15 +42,13 @@ def construct_with_graphtool(network_data, vertex_labels, use_gpu, weights = Non
     #### SPARSE MAT INPUT ####
     ##########################
     elif isinstance(network_data, scipy.sparse.coo_matrix):
-        if not use_gpu:
-            graph_data_df = pd.DataFrame()
-        # else:
-        #     graph_data_df = cudf.DataFrame()
+
+        graph_data_df = pd.DataFrame()
         graph_data_df["source"] = network_data.row
         graph_data_df["destination"] =  network_data.col
         graph_data_df["weights"] = network_data.data
 
-        graph.add_vertex(len(graph_data_df)) ## add vertices
+        graph.add_vertex(len(vertex_labels)) ## add vertices
         eweight = graph.new_ep("float")
         graph.add_edge_list(list(map(tuple, graph_data_df.values)), eprops = [eweight]) ## add weighted edges
         graph.edge_properties["weight"] = eweight
@@ -60,7 +57,7 @@ def construct_with_graphtool(network_data, vertex_labels, use_gpu, weights = Non
     ####   LIST INPUT   ####
     ########################
     elif isinstance(network_data, list):
-        graph.add_vertex(len(network_data)) ## add vertices
+        graph.add_vertex(len(vertex_labels)) ## add vertices
 
         if weights is not None:
             weighted_edges = []
@@ -82,14 +79,13 @@ def construct_with_graphtool(network_data, vertex_labels, use_gpu, weights = Non
 
     return graph
 
-def construct_with_networkx(network_data, vertex_labels, use_gpu, weights = None):
+def construct_with_networkx(network_data, vertex_labels, weights = None):
+    import networkx as nx
     ## initialise nx graph and add nodes
     graph = nx.Graph()
-    graph.add_nodes_from(range(len(vertex_labels)))
 
-    ## add node labels
-    for i in range(len(vertex_labels)):
-        graph.nodes[i]["id"] = vertex_labels[i]
+    nodes_list = [(i, dict(id=vertex_labels[i])) for i in range(len(vertex_labels))]
+    graph.add_nodes_from(nodes_list)
 
     ########################
     ####    DF INPUT    ####
@@ -98,8 +94,7 @@ def construct_with_networkx(network_data, vertex_labels, use_gpu, weights = None
         network_data.columns = ["source", "destination"]
         if weights is not None:
             network_data["weights"] = weights
-            for i in range(len(vertex_labels)):
-                graph.add_edge(network_data["source"][i], network_data["destination"][i], weight=network_data["weights"][i])
+            graph.add_weighted_edges_from(network_data.values)
         else:
             graph.add_edges_from(network_data.values)
 
@@ -107,8 +102,8 @@ def construct_with_networkx(network_data, vertex_labels, use_gpu, weights = None
     #### SPARSE MAT INPUT ####
     ##########################
     elif isinstance(network_data, scipy.sparse.coo_matrix):
-        for i in range(len(vertex_labels)):
-            graph.add_edge(network_data.row[i], network_data.col[i], weight=network_data.data[i])
+        weighted_edges = list(zip(list(network_data.row), list(network_data.col), list(network_data.data)))
+        graph.add_weighted_edges_from(weighted_edges)
 
     ########################
     ####   LIST INPUT   ####
@@ -116,8 +111,8 @@ def construct_with_networkx(network_data, vertex_labels, use_gpu, weights = None
     elif isinstance(network_data, list):
         if weights is not None:
             src, dest = zip(*network_data)
-            for i in range(len(vertex_labels)):
-                graph.add_edge(src[i], dest[i], weight=weights[i])
+            weighted_edges = list(zip(src, dest, weights))
+            graph.add_weighted_edges_from(weighted_edges)
         else:
             graph.add_edges_from(network_data)
 
