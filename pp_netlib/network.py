@@ -43,6 +43,7 @@ class Network:
             *OR*
 
             export GRAPH_BACKEND=GT ## inside bash/shell terminal/environment
+            ```
         """
         self.ref_list = ref_list
         self.query_list = query_list
