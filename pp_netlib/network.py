@@ -2,7 +2,8 @@ import os, sys
 import numpy as np
 import pandas as pd
 import scipy
-import graph_tool.all as gt
+
+from pp_netlib.functions import construct_with_graphtool, construct_with_networkx
 
 
 class Network:
@@ -51,6 +52,11 @@ class Network:
         self.use_gpu = use_gpu
         self.graph = None
 
+        if self.backend == "GT":
+            import graph_tool.all as gt
+        elif self.backend == "NX":
+            import networkx as nx
+
         if use_gpu:
             raise NotImplementedError("GPU graph not yet implemented")
             use_gpu = False
@@ -77,6 +83,9 @@ class Network:
 
         This method is called on a Network object and produces a graph populated with edges.
 
+        The number of ref_list elements (used in initialising the Network object) is assumed to be equal to the number of edges in any of
+        the following data types. Additionally, the orders of elements in the ref_list and network_data are also assumed to correspond exactly.
+
         network_data can be a dataframe, sparse matrix, or a list of tuples where each tuple contains source and destination node indices.
         The following data generate identical graphs:
         ## Edge List
@@ -99,6 +108,9 @@ class Network:
         ```
 
         ## Sparse matrix
+        ## edge_matrix.row should return source nodes
+        ## edge_matrix.col should return destination nodes
+        ## edge_matrix.data should return weights
         >> edge_matrix
         ```
         (0, 1)	0.1
@@ -132,68 +144,10 @@ class Network:
             self_comparison = True
 
         # initialise a graph object
-        self.graph = gt.Graph(directed = False) ## initialise graph_tool graph object
-
-        ########################
-        ####    DF INPUT    ####
-        ########################
-        if isinstance(network_data, pd.DataFrame):
-            # if use_gpu:
-            #     network_data = cudf.from_pandas(network_data) ## convert to cudf if use_gpu
-            ## add column names
-            network_data.columns = ["source", "destination"]
-
-            self.graph.add_vertex(len(network_data)) ## add vertices
-
-            ## add weights column if weights provided as list (add error catching?)
-            if weights is not None:
-                network_data["weights"] = weights
-                eweight = self.graph.new_ep("float")
-                self.graph.add_edge_list(network_data.values, eprops = [eweight]) ## add weighted edges
-                self.graph.edge_properties["weight"] = eweight
-            else:
-                self.graph.add_edge_list(network_data.values) ## add edges
-
-        ##########################
-        #### SPARSE MAT INPUT ####
-        ##########################
-        elif isinstance(network_data, scipy.sparse.coo_matrix):
-            if not use_gpu:
-                graph_data_df = pd.DataFrame()
-            # else:
-            #     graph_data_df = cudf.DataFrame()
-            graph_data_df["source"] = network_data.row
-            graph_data_df["destination"] =  network_data.col
-            graph_data_df["weights"] = network_data.data
-
-            self.graph.add_vertex(len(graph_data_df)) ## add vertices
-            eweight = self.graph.new_ep("float")
-            self.graph.add_edge_list(list(map(tuple, graph_data_df.values)), eprops = [eweight]) ## add weighted edges
-            self.graph.edge_properties["weight"] = eweight
-
-        ########################
-        ####   LIST INPUT   ####
-        ########################
-        elif isinstance(network_data, list):
-            self.graph.add_vertex(len(network_data)) ## add vertices
-
-            if weights is not None:
-                weighted_edges = []
-
-                for i in range(len(network_data)):
-                    weighted_edges.append(network_data[i] + (weights[i],))
-
-                eweight = self.graph.new_ep("float")
-                self.graph.add_edge_list(weighted_edges, eprops = [eweight]) ## add weighted edges
-                self.graph.edge_properties["weight"] = eweight
-
-            else:
-                self.graph.add_edge_list(network_data) ## add edges
-
-        v_name_prop = self.graph.new_vp("string")
-        self.graph.vertex_properties["id"] = v_name_prop
-        for i in range(len([v for v in self.graph.vertices()])):
-            v_name_prop[self.graph.vertex(i)] = vertex_labels[i]
+        if self.backend == "GT":
+            self.graph = construct_with_graphtool(network_data=network_data, vertex_labels=vertex_labels, weights=weights)
+        elif self.backend == "NX":
+            self.graph = construct_with_networkx(network_data=network_data, vertex_labels=vertex_labels, weights=weights)
 
         ## keeping this section here for now; might be useful in add_to_network method
         # ########################
