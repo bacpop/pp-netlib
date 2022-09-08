@@ -24,3 +24,6 @@ python tests/test_backend_selector.py
 
 ## test summarise method
 python tests/test_summarise.py
+
+## test saving and loading
+python tests/test_save_load.py

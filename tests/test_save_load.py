@@ -1,4 +1,3 @@
-from genericpath import isfile
 import os
 import networkx as nx
 import graph_tool.all as gt
@@ -40,11 +39,9 @@ def check_loading(gt_edges, nx_edges):
 
     loaded_nx_graph = Network(ref_list=[], backend="NX", outdir="tests/")
     loaded_nx_graph.load_network("tests/test_nx_graph.graphml")
-    loaded_nx_edges = loaded_nx_graph.loaded_graph.edges()
+    loaded_nx_edges = list(loaded_nx_graph.loaded_graph.edges())
 
     try:
-        print("loaded nx edges = ", loaded_nx_edges)
-        print("nx edges = ", nx_edges)
         assert loaded_gt_edges == gt_edges
         print("Graph-tools successfully loads file.")
         assert loaded_nx_edges == nx_edges
@@ -58,3 +55,10 @@ if __name__ == "__main__":
     check_if_saved("tests/test_gt_graph.gt")
     check_if_saved("tests/test_nx_graph.graphml")
     check_loading(gt_edges, nx_edges)
+    os.remove("tests/test_gt_graph.gt")
+    os.remove("tests/test_nx_graph.graphml")
+
+    print("tests/test_gt_graph.gt, tests/test_nx_graph.graphml removed, cleanup done.")
+
+    assert os.path.isfile("tests/test_gt_graph.gt") is False
+    assert os.path.isfile("tests/test_nx_graph.graphml") is False
