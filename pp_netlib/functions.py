@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 
 def construct_with_graphtool(network_data, vertex_labels, weights = None):
-    import graph_tool.all as gt
     """Construct a graph with graph-tool
 
     Args:
@@ -18,6 +17,8 @@ def construct_with_graphtool(network_data, vertex_labels, weights = None):
     Returns:
         graph (gt.Graph): Graph-tool graph object populated with network data
     """
+    import graph_tool.all as gt
+
     graph = gt.Graph(directed = False) ## initialise graph_tool graph object
 
     ########################
@@ -78,7 +79,19 @@ def construct_with_graphtool(network_data, vertex_labels, weights = None):
     return graph
 
 def construct_with_networkx(network_data, vertex_labels, weights = None):
+    """Construct a graph with networkx
+
+    Args:
+        network_data (dataframe OR edge list OR sparse coordinate matrix): Data containing record of edges in the graph.
+        vertex_labels (list): List of vertex/node labels to apply to graph vertices
+        weights (list, optional): List of weights associated with edges in network_data.
+                                      Weights must be in the same order as edges in network_data. Defaults to None.
+
+    Returns:
+        graph (nx.Graph): Graph-tool graph object populated with network data
+    """
     import networkx as nx
+    
     ## initialise nx graph and add nodes
     graph = nx.Graph()
 
@@ -131,6 +144,7 @@ def summarise(graph, backend):
     """
 
     if backend == "GT":
+        import graph_tool.all as gt
         component_assignments, component_frequencies = gt.label_components(graph)
         components = len(component_frequencies)
         density = len(list(graph.edges()))/(0.5 * len(list(graph.vertices())) * (len(list(graph.vertices())) - 1))
@@ -155,6 +169,7 @@ def summarise(graph, backend):
             weighted_mean_bt = betweenness[0]
 
     elif backend == "NX":
+        import networkx as nx
         components = nx.number_connected_components(graph)
         density = nx.density(graph)
         transitivity = nx.transitivity(graph)
