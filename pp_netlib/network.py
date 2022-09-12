@@ -54,8 +54,10 @@ class Network:
         self.graph = None
 
         if self.backend == "GT":
+            global gt
             import graph_tool.all as gt
         elif self.backend == "NX":
+            global nx
             import networkx as nx
 
         if use_gpu:
