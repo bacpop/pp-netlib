@@ -4,10 +4,9 @@
 import scipy
 import numpy as np
 import pandas as pd
-import graph_tool.all as gt
-import networkx as nx
 
 def construct_with_graphtool(network_data, vertex_labels, weights = None):
+    import graph_tool.all as gt
     """Construct a graph with graph-tool
 
     Args:
@@ -79,24 +78,12 @@ def construct_with_graphtool(network_data, vertex_labels, weights = None):
     return graph
 
 def construct_with_networkx(network_data, vertex_labels, weights = None):
-    """Construct a graph with networkx
-
-    Args:
-        network_data (dataframe OR edge list OR sparse coordinate matrix): Data containing record of edges in the graph.
-        vertex_labels (list): List of vertex/node labels to apply to graph vertices
-        weights (list, optional): List of weights associated with edges in network_data.
-                                      Weights must be in the same order as edges in network_data. Defaults to None.
-
-    Returns:
-        nx.Graph: Networkx graph object populated with network data
-    """
+    import networkx as nx
     ## initialise nx graph and add nodes
     graph = nx.Graph()
-    graph.add_nodes_from(range(len(vertex_labels)))
 
-    ## add node labels
-    for i in range(len(vertex_labels)):
-        graph.nodes[i]["id"] = vertex_labels[i]
+    nodes_list = [(i, dict(id=vertex_labels[i])) for i in range(len(vertex_labels))]
+    graph.add_nodes_from(nodes_list)
 
     ########################
     ####    DF INPUT    ####
@@ -105,8 +92,7 @@ def construct_with_networkx(network_data, vertex_labels, weights = None):
         network_data.columns = ["source", "destination"]
         if weights is not None:
             network_data["weights"] = weights
-            for i in range(len(network_data)):
-                graph.add_edge(network_data["source"][i], network_data["destination"][i], weight=network_data["weights"][i])
+            graph.add_weighted_edges_from(network_data.values)
         else:
             graph.add_edges_from(network_data.values)
 
@@ -114,8 +100,8 @@ def construct_with_networkx(network_data, vertex_labels, weights = None):
     #### SPARSE MAT INPUT ####
     ##########################
     elif isinstance(network_data, scipy.sparse.coo_matrix):
-        for i in range((network_data.shape[0])):
-            graph.add_edge(network_data.row[i], network_data.col[i], weight=network_data.data[i])
+        weighted_edges = list(zip(list(network_data.row), list(network_data.col), list(network_data.data)))
+        graph.add_weighted_edges_from(weighted_edges)
 
     ########################
     ####   LIST INPUT   ####
@@ -123,8 +109,8 @@ def construct_with_networkx(network_data, vertex_labels, weights = None):
     elif isinstance(network_data, list):
         if weights is not None:
             src, dest = zip(*network_data)
-            for i in range(len(network_data)):
-                graph.add_edge(src[i], dest[i], weight=weights[i])
+            weighted_edges = list(zip(src, dest, weights))
+            graph.add_weighted_edges_from(weighted_edges)
         else:
             graph.add_edges_from(network_data)
 

@@ -2,8 +2,6 @@ import os, sys
 import numpy as np
 import pandas as pd
 import scipy
-import graph_tool.all as gt
-import networkx as nx
 
 from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, summarise
 
@@ -54,6 +52,11 @@ class Network:
             self.backend = backend ## else use backend if specified
         self.use_gpu = use_gpu
         self.graph = None
+
+        if self.backend == "GT":
+            import graph_tool.all as gt
+        elif self.backend == "NX":
+            import networkx as nx
 
         if use_gpu:
             raise NotImplementedError("GPU graph not yet implemented")
