@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import scipy
 
-from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, summarise
+from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, prune_cliques, summarise
 
 # env_backend = os.getenv("GRAPH_BACKEND")
 # if env_backend == "GT":
@@ -180,9 +180,18 @@ class Network:
         #     self.edges = [edge for edge in self.graph.edges()]
 
 
-    def prune(self):
-        #prune_cliques() ###TODO populate this function call with arguments
-        return
+    def prune(self, graph):
+        
+        if self.backend == "GT":
+            reference_vertices = prune_cliques(graph)
+            self.pruned_graph = self.gt.GraphView(graph, vfilt = reference_vertices)
+            num_nodes = len(list(self.pruned_graph.vertices()))
+            num_edges = len(list(self.pruned_graph.edges()))
+
+        elif self.backend == "NX":
+            pass ##TODO
+
+        sys.stderr.write(f"Pruned network has {num_nodes} nodes and {num_edges} edges.\n")
 
     def get_summary(self, summary_file_prefix = None):
         """Method called on initialised and populated Network object. Prints summary of network properties to stderr and optionally to plain text file.
@@ -227,22 +236,21 @@ class Network:
         file_name, file_extension = os.path.splitext(network_file)
         if file_extension in [".graphml", ".xml"]:
             if self.backend == "GT":
-                loaded_graph = self.gt.load_graph(network_file)
-                num_nodes = len(list(loaded_graph.vertices()))
-                num_edges = len(list(loaded_graph.edges()))
+                self.loaded_graph = self.gt.load_graph(network_file)
+                num_nodes = len(list(self.loaded_graph.vertices()))
+                num_edges = len(list(self.loaded_graph.edges()))
             if self.backend == "NX":
-                loaded_graph = self.nx.read_graphml(network_file)
-                num_nodes = len(loaded_graph.nodes())
-                num_edges = len(loaded_graph.edges())
+                self.loaded_graph = self.nx.read_graphml(network_file)
+                num_nodes = len(self.loaded_graph.nodes())
+                num_edges = len(self.loaded_graph.edges())
 
         if file_extension == ".gt":
-            loaded_graph = self.gt.load_graph(network_file)
-            num_nodes = len(list(loaded_graph.vertices()))
-            num_edges = len(list(loaded_graph.edges()))
+            self.loaded_graph = self.gt.load_graph(network_file)
+            num_nodes = len(list(self.loaded_graph.vertices()))
+            num_edges = len(list(self.loaded_graph.edges()))
             if self.backend == "NX":
                 sys.stderr.write("Network file provided is in .gt format and will be loaded with graph_tool. Please convert it to a networkx graph if you'd like to manipulate or modify it.")
         
-        self.loaded_graph = loaded_graph
         sys.stderr.write(f"Loaded network with {num_nodes} nodes and {num_edges} edges.\n")
 
         if file_extension in [".csv", ".tsv", ".txt"]:
