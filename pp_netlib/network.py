@@ -5,6 +5,12 @@ import scipy
 
 from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, summarise
 
+# env_backend = os.getenv("GRAPH_BACKEND")
+# if env_backend == "GT":
+#     import graph_tool.all as gt
+# elif env_backend == "NX":
+#     import networkx as nx
+
 
 class Network:
     def __init__(self, ref_list, query_list = None, outdir = "./", backend = None, use_gpu = False):
@@ -54,11 +60,11 @@ class Network:
         self.graph = None
 
         if self.backend == "GT":
-            global gt
             import graph_tool.all as gt
+            self.gt = gt
         elif self.backend == "NX":
-            global nx
             import networkx as nx
+            self.nx = nx
 
         if use_gpu:
             raise NotImplementedError("GPU graph not yet implemented")
@@ -221,16 +227,16 @@ class Network:
         file_name, file_extension = os.path.splitext(network_file)
         if file_extension in [".graphml", ".xml"]:
             if self.backend == "GT":
-                loaded_graph = gt.load_graph(network_file)
+                loaded_graph = self.gt.load_graph(network_file)
                 num_nodes = len(list(loaded_graph.vertices()))
                 num_edges = len(list(loaded_graph.edges()))
             if self.backend == "NX":
-                loaded_graph = nx.read_graphml(network_file)
+                loaded_graph = self.nx.read_graphml(network_file)
                 num_nodes = len(loaded_graph.nodes())
                 num_edges = len(loaded_graph.edges())
 
         if file_extension == ".gt":
-            loaded_graph = gt.load_graph(network_file)
+            loaded_graph = self.gt.load_graph(network_file)
             num_nodes = len(list(loaded_graph.vertices()))
             num_edges = len(list(loaded_graph.edges()))
             if self.backend == "NX":
@@ -308,7 +314,7 @@ class Network:
                     self.graph.save(os.path.join(outdir, file_name+file_format))
 
         if self.backend == "NX":
-            nx.write_graphml(self.graph, os.path.join(outdir, file_name+".graphml"))
+            self.nx.write_graphml(self.graph, os.path.join(outdir, file_name+".graphml"))
 
 
         # file_name = outdir + "/" + prefix
