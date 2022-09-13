@@ -35,11 +35,11 @@ def check_if_saved(file_path):
 def check_loading(gt_edges, nx_edges):
     loaded_gt_graph = Network(ref_list=[], backend="GT", outdir="tests/")
     loaded_gt_graph.load_network("tests/test_gt_graph.gt")
-    loaded_gt_edges = [str(e) for e in loaded_gt_graph.loaded_graph.edges()]
+    loaded_gt_edges = [str(e) for e in loaded_gt_graph.graph.edges()]
 
     loaded_nx_graph = Network(ref_list=[], backend="NX", outdir="tests/")
     loaded_nx_graph.load_network("tests/test_nx_graph.graphml")
-    loaded_nx_edges = list(loaded_nx_graph.loaded_graph.edges())
+    loaded_nx_edges = list(loaded_nx_graph.graph.edges())
 
     try:
         assert loaded_gt_edges == gt_edges

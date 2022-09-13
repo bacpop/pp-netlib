@@ -1,5 +1,4 @@
 import os
-from re import A
 import graph_tool
 import numpy as np
 import pandas as pd

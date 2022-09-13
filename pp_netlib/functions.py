@@ -176,10 +176,9 @@ def summarise(graph, backend):
 
         betweenness = []
         sizes = []
-        subgraphs = [graph.subgraph(c).copy() for c in nx.connected_components(graph)]
-        for subgraph in subgraphs:
-            betweenness.append(max((nx.betweenness_centrality(subgraph)).values()))
-            sizes.append(len(subgraph))
+        for c in nx.connected_components(graph):
+            betweenness.append(max((nx.betweenness_centrality(graph.subgraph(c))).values()))
+            sizes.append(len(graph.subgraph(c)))
 
         if len(betweenness) > 1:
             mean_bt = np.mean(betweenness)
@@ -191,16 +190,6 @@ def summarise(graph, backend):
     metrics = [components, density, transitivity, mean_bt, weighted_mean_bt]
     base_score = transitivity * (1 - density)
     scores = [base_score, base_score * (1 - metrics[3]), base_score * (1 - metrics[4])]
-
-    summary_contents = ("Network summary:\n" + "\n".join(["\tComponents\t\t\t\t" + str(metrics[0]),
-                                                    "\tDensity\t\t\t\t\t" + "{:.4f}".format(metrics[1]),
-                                                    "\tTransitivity\t\t\t\t" + "{:.4f}".format(metrics[2]),
-                                                    "\tMean betweenness\t\t\t" + "{:.4f}".format(metrics[3]),
-                                                    "\tWeighted-mean betweenness\t\t" + "{:.4f}".format(metrics[4]),
-                                                    "\tScore\t\t\t\t\t" + "{:.4f}".format(scores[0]),
-                                                    "\tScore (w/ betweenness)\t\t\t" + "{:.4f}".format(scores[1]),
-                                                    "\tScore (w/ weighted-betweenness)\t\t" + "{:.4f}".format(scores[2])])
-                                                    + "\n")
-
-    return summary_contents
+    
+    return metrics, scores
 
