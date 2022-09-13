@@ -206,7 +206,7 @@ def summarise(graph, backend):
 ########################
 ####     .PRUNE     ####
 ########################
-def get_clique_refs(graph, reference_indices = set()):
+def get_gt_clique_refs(graph, reference_indices = set()):
     """Recursively prune a network of its cliques. Returns one vertex from
     a clique at each stage
 
@@ -229,14 +229,15 @@ def get_clique_refs(graph, reference_indices = set()):
         # Remove the clique, and prune the resulting subgraph (recursively)
         subgraph = gt.GraphView(graph, vfilt=[v not in clique for v in graph.vertices()])
         if subgraph.num_vertices() > 1:
-            get_clique_refs(subgraph, reference_indices)
+            get_gt_clique_refs(subgraph, reference_indices)
         elif subgraph.num_vertices() == 1:
             reference_indices.add(subgraph.get_vertices()[0])
     except StopIteration:
         pass
+
     return reference_indices
 
-def prune_cliques(component, graph, reference_indices, components_list):
+def gt_prune_cliques(graph, reference_indices, component, components_list):
     """Wrapper function around :func:`~getCliqueRefs` so it can be
        called by a multiprocessing pool
 
@@ -253,6 +254,40 @@ def prune_cliques(component, graph, reference_indices, components_list):
         refs.add(subgraph.get_vertices()[0])
         ref_list = refs
     else:
-        ref_list = get_clique_refs(subgraph, refs)
+        ref_list = get_gt_clique_refs(subgraph, refs)
+
+    return(list(ref_list))
+
+def get_nx_clique_refs(graph, reference_indices = set()):
+
+    cliques = nx.find_cliques(graph)
+
+    try:
+        clique = frozenset(next(cliques))
+        if clique.isdisjoint(reference_indices):
+            reference_indices.add(list(clique)[0])
         
+        subgraph = graph.subgraph([v not in clique for v in graph.nodes()])
+        if subgraph.num_vertices() > 1:
+            get_nx_clique_refs(subgraph, reference_indices)
+        elif subgraph.num_vertices() == 1:
+            reference_indices.add(subgraph.get_vertices()[0])
+    except StopIteration:
+        pass
+
+    return reference_indices
+
+def nx_prune_cliques(graph, reference_indices, component, components_list):
+
+    import networkx as nx
+
+    subgraph = graph.subgraph(components_list == component)
+    refs = reference_indices.copy()
+    if len(subgraph.nodes()) <= 2:
+        refs.add(list(subgraph.nodes())[0])
+        ref_list = refs
+    else:
+        ref_list = get_gt_clique_refs(subgraph, refs)
+
+    
     return(list(ref_list))

@@ -91,9 +91,8 @@ example_loaded_network = Network([])
 example_loaded_network.load_network("path/to/network_file.graphml")
 
 # access loaded data using
-example_loaded_network.loaded_graph
+example_loaded_network.graph
 
-# rather than example_loaded_network.graph
 ```
 
 ## .save

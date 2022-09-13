@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import scipy
 
-from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, prune_cliques, summarise
+from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, gt_prune_cliques, summarise
 
 # env_backend = os.getenv("GRAPH_BACKEND")
 # if env_backend == "GT":
@@ -78,8 +78,8 @@ class Network:
             #     import rmm
             #     use_gpu = True
             # except ImportError or ModuleNotFoundError as e:
-            #     sys.stderr.write("Unable to load GPU libraries; using CPU libraries instead\n")
-            #     use_gpu = False
+            #     sys.stderr.write("Unable to load GPU libraries\n")
+            #     sys.exit(1)
 
 
     def construct(self, network_data, weights = None): #, previous_network = None, adding_qq_dists = False, old_ids = None, previous_pkl = None):
@@ -183,7 +183,7 @@ class Network:
     def prune(self, graph):
         
         if self.backend == "GT":
-            reference_vertices = prune_cliques(graph)
+            reference_vertices = gt_prune_cliques(graph)
             self.pruned_graph = self.gt.GraphView(graph, vfilt = reference_vertices)
             num_nodes = len(list(self.pruned_graph.vertices()))
             num_edges = len(list(self.pruned_graph.edges()))
@@ -233,23 +233,27 @@ class Network:
             network_file (str/path): The file in which the prebuilt graph is stored. Must be a .gt file, .graphml file or .xml file.
         """
         # Load the network from the specified file
+        if self.graph is not None:
+            sys.stderr.write("This instance of the network object already has a graph made with the construct method. Please use another Network instance to load another graph from file.")
+            sys.exit(1)
+    
         file_name, file_extension = os.path.splitext(network_file)
         if file_extension in [".graphml", ".xml"]:
             if self.backend == "GT":
-                self.loaded_graph = self.gt.load_graph(network_file)
-                num_nodes = len(list(self.loaded_graph.vertices()))
-                num_edges = len(list(self.loaded_graph.edges()))
+                self.graph = self.gt.load_graph(network_file)
+                num_nodes = len(list(self.graph.vertices()))
+                num_edges = len(list(self.graph.edges()))
             if self.backend == "NX":
-                self.loaded_graph = self.nx.read_graphml(network_file)
-                num_nodes = len(self.loaded_graph.nodes())
-                num_edges = len(self.loaded_graph.edges())
+                self.graph = self.nx.read_graphml(network_file)
+                num_nodes = len(self.graph.nodes())
+                num_edges = len(self.graph.edges())
 
         if file_extension == ".gt":
-            self.loaded_graph = self.gt.load_graph(network_file)
-            num_nodes = len(list(self.loaded_graph.vertices()))
-            num_edges = len(list(self.loaded_graph.edges()))
+            self.graph = self.gt.load_graph(network_file)
+            num_nodes = len(list(self.graph.vertices()))
+            num_edges = len(list(self.graph.edges()))
             if self.backend == "NX":
-                sys.stderr.write("Network file provided is in .gt format and will be loaded with graph_tool. Please convert it to a networkx graph if you'd like to manipulate or modify it.")
+                sys.stderr.write("Network file provided is in .gt format Please use networkx as backend to laod this file.")
         
         sys.stderr.write(f"Loaded network with {num_nodes} nodes and {num_edges} edges.\n")
 
