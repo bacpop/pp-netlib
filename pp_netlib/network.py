@@ -1,9 +1,12 @@
+from functools import partial
+from multiprocessing import Pool
 import os, sys
+import re
 import numpy as np
 import pandas as pd
 import scipy
 
-from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, gt_prune_cliques, summarise
+from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, gt_get_ref_graph, gt_prune_cliques, summarise
 
 # env_backend = os.getenv("GRAPH_BACKEND")
 # if env_backend == "GT":
@@ -180,13 +183,18 @@ class Network:
         #     self.edges = [edge for edge in self.graph.edges()]
 
 
-    def prune(self, graph):
+    def prune(self):
         
         if self.backend == "GT":
-            reference_vertices = gt_prune_cliques(graph)
-            self.pruned_graph = self.gt.GraphView(graph, vfilt = reference_vertices)
-            num_nodes = len(list(self.pruned_graph.vertices()))
-            num_edges = len(list(self.pruned_graph.edges()))
+            reference_vertices = set()
+            components = self.gt.label_components(self.graph)[0].a
+            reference_vertices = gt_prune_cliques(graph=self.graph, reference_indices=set(), components_list=(components))
+
+            #print(f"reference_vertices = {reference_vertices}")
+            #self.graph = self.gt.GraphView(self.graph, vfilt = reference_vertices)
+            self.graph = gt_get_ref_graph(self.graph, reference_vertices)
+            num_nodes = len(list(self.graph.vertices()))
+            num_edges = len(list(self.graph.edges()))
 
         elif self.backend == "NX":
             pass ##TODO

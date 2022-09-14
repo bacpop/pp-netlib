@@ -1,6 +1,7 @@
 ########################
 ####   .CONSTRUCT   ####
 ########################
+import sys
 import scipy
 import numpy as np
 import pandas as pd
@@ -206,7 +207,7 @@ def summarise(graph, backend):
 ########################
 ####     .PRUNE     ####
 ########################
-def get_gt_clique_refs(graph, reference_indices = set()):
+def get_gt_clique_refs(graph, reference_indices:set()):
     """Recursively prune a network of its cliques. Returns one vertex from
     a clique at each stage
 
@@ -218,6 +219,7 @@ def get_gt_clique_refs(graph, reference_indices = set()):
         reference_indices (set)
             The unique list of vertices being kept, to add to
     """
+    import graph_tool.all as gt
     cliques = gt.max_cliques(graph)
     try:
         # Get the first clique, and see if it has any members already
@@ -237,7 +239,7 @@ def get_gt_clique_refs(graph, reference_indices = set()):
 
     return reference_indices
 
-def gt_prune_cliques(graph, reference_indices, component, components_list):
+def gt_prune_cliques(graph, components_list, reference_indices = set()):
     """Wrapper function around :func:`~getCliqueRefs` so it can be
        called by a multiprocessing pool
 
@@ -248,15 +250,35 @@ def gt_prune_cliques(graph, reference_indices, component, components_list):
 
     if gt.openmp_enabled():
         gt.openmp_set_num_threads(1)
-    subgraph = gt.GraphView(graph, vfilt=components_list == component)
+    sys.setrecursionlimit(3000)
     refs = reference_indices.copy()
-    if subgraph.num_vertices() <= 2:
-        refs.add(subgraph.get_vertices()[0])
-        ref_list = refs
-    else:
-        ref_list = get_gt_clique_refs(subgraph, refs)
-
+    for component in set(components_list):
+        subgraph = gt.GraphView(graph, vfilt=components_list == component)
+        if subgraph.num_vertices() <= 2:
+            #print(subgraph.get_vertices())
+            refs.add(list(subgraph.get_vertices())[0])
+            #print(f"refs = {refs}")
+            ref_list = refs
+        else:
+            #print(subgraph.get_vertices())
+            ref_list = get_gt_clique_refs(subgraph, refs)
+    #print(f"ref_list = {ref_list}")
     return(list(ref_list))
+
+def gt_get_ref_graph(graph, ref_indices):
+
+    import graph_tool.all as gt
+    reference_vertex = graph.new_vertex_property('bool')
+    for n, vertex in enumerate(graph.vertices()):
+        if n in ref_indices:
+            reference_vertex[vertex] = True
+        else:
+            reference_vertex[vertex] = False
+
+    ref_graph = gt.GraphView(graph, vfilt = reference_vertex)
+    ref_graph = gt.Graph(ref_graph, prune = True)
+
+    return ref_graph
 
 def get_nx_clique_refs(graph, reference_indices = set()):
 
@@ -281,6 +303,7 @@ def nx_prune_cliques(graph, reference_indices, component, components_list):
 
     import networkx as nx
 
+    sys.setrecursionlimit(3000)
     subgraph = graph.subgraph(components_list == component)
     refs = reference_indices.copy()
     if len(subgraph.nodes()) <= 2:
