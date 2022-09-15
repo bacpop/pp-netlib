@@ -1,12 +1,11 @@
 from functools import partial
 from multiprocessing import Pool
 import os, sys
-import re
 import numpy as np
 import pandas as pd
 import scipy
 
-from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, gt_get_ref_graph, gt_prune_cliques, summarise
+from pp_netlib.functions import clique_prune, clique_wrapper, construct_with_graphtool, construct_with_networkx, gt_get_ref_graph, gt_prune_cliques, summarise
 
 # env_backend = os.getenv("GRAPH_BACKEND")
 # if env_backend == "GT":
@@ -184,17 +183,26 @@ class Network:
 
 
     def prune(self):
-        
+
         if self.backend == "GT":
             reference_vertices = set()
             components = self.gt.label_components(self.graph)[0].a
-            reference_vertices = gt_prune_cliques(graph=self.graph, reference_indices=set(), components_list=(components))
+            #reference_vertices = gt_prune_cliques(graph=self.graph, reference_indices=set(), components_list=(components))
 
+            for component in set(components):
+                reference_indices = clique_prune(component, self.graph, set(), components)
+                reference_vertices.add(list(reference_indices)[0])
+
+            # with Pool as pool:
+            #     ref_verts = pool.map([component for component in set(components)], clique_prune, graph=self.graph, reference_indices=set(), component_list=components)
+
+            #print(ref_verts)
             #print(f"reference_vertices = {reference_vertices}")
             #self.graph = self.gt.GraphView(self.graph, vfilt = reference_vertices)
             self.graph = gt_get_ref_graph(self.graph, reference_vertices)
             num_nodes = len(list(self.graph.vertices()))
             num_edges = len(list(self.graph.edges()))
+
 
         elif self.backend == "NX":
             pass ##TODO

@@ -1,6 +1,8 @@
 ########################
 ####   .CONSTRUCT   ####
 ########################
+from functools import partial
+from multiprocessing import Pool, freeze_support
 import sys
 import scipy
 import numpy as np
@@ -257,13 +259,40 @@ def gt_prune_cliques(graph, components_list, reference_indices = set()):
         if subgraph.num_vertices() <= 2:
             #print(subgraph.get_vertices())
             refs.add(list(subgraph.get_vertices())[0])
-            #print(f"refs = {refs}")
+            print(f"refs = {refs}")
             ref_list = refs
         else:
             #print(subgraph.get_vertices())
             ref_list = get_gt_clique_refs(subgraph, refs)
-    #print(f"ref_list = {ref_list}")
+
     return(list(ref_list))
+
+def clique_prune(component, graph, reference_indices, components_list):
+    import graph_tool.all as gt
+    if gt.openmp_enabled():
+        gt.openmp_set_num_threads(1)
+    sys.setrecursionlimit(3000)
+    subgraph = gt.GraphView(graph, vfilt=components_list == component)
+    refs = reference_indices.copy()
+    if subgraph.num_vertices() <= 2:
+        refs.add(subgraph.get_vertices()[0])
+        try:
+            refs.add(subgraph.get_vertices()[1])
+        except IndexError as ie:
+            pass
+        ref_list = refs
+    else:
+        ref_list = get_gt_clique_refs(subgraph, refs)
+    return(list(ref_list))
+
+def clique_wrapper(graph, components):
+    freeze_support()
+    with Pool(processes=4) as pool:
+        ref_lists = pool.map(partial(clique_prune, graph=graph, reference_indices=set(), components_list=components), set(components))
+
+        reference_indices = set([entry for sublist in ref_lists for entry in sublist])
+
+    return reference_indices
 
 def gt_get_ref_graph(graph, ref_indices):
 
