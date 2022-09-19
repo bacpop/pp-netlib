@@ -243,7 +243,7 @@ class Network:
         return #files associated with viz
 
     def load_network(self, network_file):
-        """Load a premade graph from a network file. 
+        """Load a premade graph from a network file.
 
         Args:
             network_file (str/path): The file in which the prebuilt graph is stored. Must be a .gt file, .graphml file or .xml file.
@@ -252,7 +252,7 @@ class Network:
         if self.graph is not None:
             sys.stderr.write("This instance of the network object already has a graph made with the construct method. Please use another Network instance to load another graph from file.")
             sys.exit(1)
-    
+
         file_name, file_extension = os.path.splitext(network_file)
         if file_extension in [".graphml", ".xml"]:
             if self.backend == "GT":
@@ -276,7 +276,7 @@ class Network:
         if file_extension in [".csv", ".tsv", ".txt"]:
             sys.stderr.write("The network file appears to be in tabular format, please load it as a dataframe and use the construct method to build a graph.\n")
             sys.exit(1)
-        
+
 
         # if not self.use_gpu:
         #     genome_network = gt.load_graph(network_file)
@@ -295,10 +295,46 @@ class Network:
 
         # return genome_network
 
-    def add_to_network(self, new_data):
-        # calls functions which load a preexisting network, or work with a newly built one, and add data to it?
-        print(f"adding {new_data} to network")
-        return
+    def add_to_network(self, new_data_df, vertex_labels_column, weights):
+
+        if self.graph is None:
+            sys.stderr.write("No network found, cannot add data. Please load a network to add data to or construct a network with this data.")
+
+        if self.backend == "GT":
+            prev_graph_df = pd.DataFrame(columns=["source", "target", "vertex_labels"])
+            prev_graph_df["source"] = self.gt.edge_endpoint_property(self.graph, self.graph.vertex_index, "source")
+            prev_graph_df["target"] = self.gt.edge_endpoint_property(self.graph, self.graph.vertex_index, "target")
+            prev_graph_df["vertex_labels"] = list(self.graph.vp["id"][v] for v in self.graph.vertices())
+
+            if weights is not None:
+                prev_graph_df["weights"] = list(self.graph.ep["weight"])
+
+            combined_df = pd.concat([new_data_df, prev_graph_df], ignore_index = True)
+
+            self.graph = self.gt.Graph(directed = False)
+            self.graph.add_vertex(len(set(combined_df["vertex_labels"])))
+            if weights is not None:
+                combined_df["weights"] = weights
+                eweight = self.graph.new_ep("float")
+                self.graph.add_edge_list(combined_df.values, eprops = [eweight]) ## add weighted edges
+                self.graph.edge_properties["weight"] = eweight
+            else:
+                self.graph.add_edge_list(combined_df.values) ## add edges
+
+            v_name_prop = self.graph.new_vp("string")
+            self.graph.vertex_properties["id"] = v_name_prop
+            for i in range(len([v for v in self.graph.vertices()])):
+                v_name_prop[self.graph.vertex(i)] = list(set(combined_df["vertex_labels"]))[i]
+
+        if self.backend == "NX":
+            new_vertex_labels = new_data_df[vertex_labels_column]
+            new_nodes_list = [(i, dict(id=new_vertex_labels[i])) for i in range(len(new_vertex_labels))]
+
+            self.graph.add_nodes_from(new_nodes_list)
+            if weights is None:
+                self.graph.add_edges_from(new_data_df.values)
+            elif weights is not None:
+                self.graph.add_weighted_edges_from(new_data_df.values)
 
     def _convert(self, intial_format, target_format):
         ### TODO call load_network, use network_to_edges, then call construct, add check to prevent computation in case of missing imports
@@ -306,12 +342,9 @@ class Network:
         if intial_format == "cugraph":
             cugraph_dataframe = cugraph.to_pandas_edgelist(self.graph)
 
-
-
         if target_format == "cugraph" and not self.use_gpu:
             sys.stderr.write("You have asked for your graph to be converted to cugraph format, but your system/environment seems to be missing gpu related imports. Converting anyway...")
 
-        
 
         print(f"converting from {intial_format} to {target_format}")
         return
