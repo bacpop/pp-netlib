@@ -2,29 +2,29 @@
 ####   .CONSTRUCT   ####
 ########################
 import scipy
+import numpy as np
 import pandas as pd
 
 def construct_with_graphtool(network_data, vertex_labels, weights = None):
-    import graph_tool.all as gt
     """Construct a graph with graph-tool
 
     Args:
         network_data (dataframe OR edge list OR sparse coordinate matrix): Data containing record of edges in the graph.
+        vertex_labels (list): List of vertex/node labels to apply to graph vertices
         weights (list, optional): List of weights associated with edges in network_data.
                                       Weights must be in the same order as edges in network_data. Defaults to None.
 
     Returns:
         graph (gt.Graph): Graph-tool graph object populated with network data
     """
+    import graph_tool.all as gt
+
     graph = gt.Graph(directed = False) ## initialise graph_tool graph object
 
     ########################
     ####    DF INPUT    ####
     ########################
     if isinstance(network_data, pd.DataFrame):
-        # if use_gpu:
-        #     network_data = cudf.from_pandas(network_data) ## convert to cudf if use_gpu
-        ## add column names
         network_data.columns = ["source", "destination"]
 
         graph.add_vertex(len(vertex_labels)) ## add vertices
@@ -42,7 +42,6 @@ def construct_with_graphtool(network_data, vertex_labels, weights = None):
     #### SPARSE MAT INPUT ####
     ##########################
     elif isinstance(network_data, scipy.sparse.coo_matrix):
-
         graph_data_df = pd.DataFrame()
         graph_data_df["source"] = network_data.row
         graph_data_df["destination"] =  network_data.col
@@ -80,7 +79,19 @@ def construct_with_graphtool(network_data, vertex_labels, weights = None):
     return graph
 
 def construct_with_networkx(network_data, vertex_labels, weights = None):
+    """Construct a graph with networkx
+
+    Args:
+        network_data (dataframe OR edge list OR sparse coordinate matrix): Data containing record of edges in the graph.
+        vertex_labels (list): List of vertex/node labels to apply to graph vertices
+        weights (list, optional): List of weights associated with edges in network_data.
+                                      Weights must be in the same order as edges in network_data. Defaults to None.
+
+    Returns:
+        graph (nx.Graph): Graph-tool graph object populated with network data
+    """
     import networkx as nx
+    
     ## initialise nx graph and add nodes
     graph = nx.Graph()
 
@@ -117,3 +128,68 @@ def construct_with_networkx(network_data, vertex_labels, weights = None):
             graph.add_edges_from(network_data)
 
     return graph
+
+########################
+####   .SUMMARISE   ####
+########################
+def summarise(graph, backend):
+    """Get graph metrics and format into soutput string.
+
+    Args:
+        graph (Network object): The graph for which to obtain summary metrics
+        backend (str): The tool used to build graph ("GT", "NX", or "CG"(TODO))
+
+    Returns:
+        summary_contents (formatted str): Graph summary metrics formatted to print to stderr
+    """
+
+    if backend == "GT":
+        import graph_tool.all as gt
+        component_assignments, component_frequencies = gt.label_components(graph)
+        components = len(component_frequencies)
+        density = len(list(graph.edges()))/(0.5 * len(list(graph.vertices())) * (len(list(graph.vertices())) - 1))
+        transitivity = gt.global_clustering(graph)[0]
+
+        mean_bt = 0
+        weighted_mean_bt = 0
+        betweenness = []
+        sizes = []
+        for component, size in enumerate(component_frequencies):
+            if size > 3:
+                vfilt = component_assignments.a == component
+                subgraph = gt.GraphView(graph, vfilt=vfilt)
+                betweenness.append(max(gt.betweenness(subgraph, norm = True)[0].a))
+                sizes.append(size)
+
+        if len(betweenness) > 1:
+            mean_bt = np.mean(betweenness)
+            weighted_mean_bt = np.average(betweenness, weights=sizes)
+        elif len(betweenness) == 1:
+            mean_bt = betweenness[0]
+            weighted_mean_bt = betweenness[0]
+
+    elif backend == "NX":
+        import networkx as nx
+        components = nx.number_connected_components(graph)
+        density = nx.density(graph)
+        transitivity = nx.transitivity(graph)
+
+        betweenness = []
+        sizes = []
+        for c in nx.connected_components(graph):
+            betweenness.append(max((nx.betweenness_centrality(graph.subgraph(c))).values()))
+            sizes.append(len(graph.subgraph(c)))
+
+        if len(betweenness) > 1:
+            mean_bt = np.mean(betweenness)
+            weighted_mean_bt = np.average(betweenness, weights=sizes)
+        elif len(betweenness) == 1:
+            mean_bt = betweenness[0]
+            weighted_mean_bt = betweenness[0]
+
+    metrics = [components, density, transitivity, mean_bt, weighted_mean_bt]
+    base_score = transitivity * (1 - density)
+    scores = [base_score, base_score * (1 - metrics[3]), base_score * (1 - metrics[4])]
+    
+    return metrics, scores
+

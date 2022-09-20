@@ -59,6 +59,7 @@ def set_with_python_gt(premade_gt_graph, sample_edge_list, weights):
         print("Setting GT backend with os.environ works as expected.")
     except AssertionError as ae:
         print("Setting GT backend with os.environ failed to work as expected.")
+        raise ae
 
 def set_with_python_nx(premade_nx_graph, sample_edge_list, weights):
     os.environ["GRAPH_BACKEND"] = "NX"
@@ -72,6 +73,7 @@ def set_with_python_nx(premade_nx_graph, sample_edge_list, weights):
         print("Setting NX backend with os.environ works as expected.")
     except AssertionError as ae:
         print("Setting NX backend with os.environ failed to work as expected.")
+        raise ae
 
 if __name__ == "__main__":
     set_with_py = get_args()
@@ -88,6 +90,7 @@ if __name__ == "__main__":
             print("Network backend selected correctly.")
         except AssertionError as ae:
             print("Network backend not selected correctly.")
+            raise ae
 
         if os.getenv("GRAPH_BACKEND") == "NX":
             try:
@@ -95,6 +98,7 @@ if __name__ == "__main__":
                 print("Network successfully selects NX.")
             except AssertionError as ae:
                 print("Network fails to select NX.")
+                raise ae
 
         elif os.getenv("GRAPH_BACKEND") == "GT":
             try:
@@ -102,3 +106,4 @@ if __name__ == "__main__":
                 print("Network successfully selects GT.")
             except AssertionError as ae:
                 print("Network fails to select GT.")
+                raise ae

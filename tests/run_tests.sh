@@ -3,11 +3,13 @@
 set -e
 set -u
 set -o pipefail
+set -x
 
 ## run setup
 
 ## test graph-tool construct functions
 python tests/test_gt_construct.py
+
 ## test networkx construct functions
 python tests/test_nx_construct.py
 
@@ -19,3 +21,9 @@ python tests/test_backend_selector.py
 
 export GRAPH_BACKEND=NX
 python tests/test_backend_selector.py
+
+## test summarise method
+python tests/test_summarise.py
+
+## test saving and loading
+python tests/test_save_load.py
