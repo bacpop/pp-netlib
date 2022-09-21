@@ -5,10 +5,10 @@ import numpy as np
 import pandas as pd
 import scipy
 
-from pp_netlib.functions import clique_prune, clique_wrapper, construct_with_graphtool, construct_with_networkx, gt_get_ref_graph, gt_prune_cliques, summarise
+from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, gt_clique_prune, gt_get_ref_graph, summarise
 
 class Network:
-    def __init__(self, ref_list, query_list = None, outdir = "./", backend = None, use_gpu = False):
+    def __init__(self, ref_list, query_list = [], outdir = "./", backend = None, use_gpu = False):
         """Initialises a graph object (based on graph-tool, networkx (TODO), or cugraph (TODO)). Produces a Network object.
 
         Args:
@@ -139,12 +139,13 @@ class Network:
         else:
             vertex_labels = self.ref_list
             self_comparison = True
-
+        self.vertex_labels = vertex_labels
+        self.weights = weights
         # initialise a graph object
         if self.backend == "GT":
-            self.graph = construct_with_graphtool(network_data=network_data, vertex_labels=vertex_labels, weights=weights)
+            self.graph = construct_with_graphtool(network_data=network_data, vertex_labels=self.vertex_labels, weights=weights)
         elif self.backend == "NX":
-            self.graph = construct_with_networkx(network_data=network_data, vertex_labels=vertex_labels, weights=weights)
+            self.graph = construct_with_networkx(network_data=network_data, vertex_labels=self.vertex_labels, weights=weights)
 
         ## keeping this section here for now; might be useful in add_to_network method
         # ########################
@@ -176,16 +177,15 @@ class Network:
             #reference_vertices = gt_prune_cliques(graph=self.graph, reference_indices=set(), components_list=(components))
 
             for component in set(components):
-                reference_indices = clique_prune(component, self.graph, set(), components)
-                reference_vertices.add(list(reference_indices)[0])
+                reference_indices = gt_clique_prune(component, self.graph, set(), components)
+                reference_vertices.update(reference_indices)
+                #print(reference_vertices)
 
             # with Pool as pool:
             #     ref_verts = pool.map([component for component in set(components)], clique_prune, graph=self.graph, reference_indices=set(), component_list=components)
 
-            #print(ref_verts)
-            #print(f"reference_vertices = {reference_vertices}")
-            #self.graph = self.gt.GraphView(self.graph, vfilt = reference_vertices)
-            self.graph = gt_get_ref_graph(self.graph, reference_vertices)
+
+            self.graph = gt_get_ref_graph(self.graph, reference_vertices, self.ref_list)
             num_nodes = len(list(self.graph.vertices()))
             num_edges = len(list(self.graph.edges()))
 
@@ -193,7 +193,7 @@ class Network:
         elif self.backend == "NX":
             pass ##TODO
 
-        sys.stderr.write(f"Pruned network has {num_nodes} nodes and {num_edges} edges.\n")
+        sys.stderr.write(f"Pruned network has {num_nodes} nodes and {num_edges} edges.\n\n")
 
     def get_summary(self, print_to_std = True, summary_file_prefix = None):
         """Method called on initialised and populated Network object. Prints summary of network properties to stderr and optionally to plain text file.
@@ -221,7 +221,7 @@ class Network:
                                                     "\tScore (w/ weighted-betweenness)\t\t" + "{:.4f}".format(self.scores[2])])
                                                     + "\n")
         if print_to_std:
-            sys.stderr.write(summary_contents)
+            sys.stderr.write(f"{summary_contents}\n\n")
 
         #################################
         #  write summary to plain text  #
@@ -245,7 +245,7 @@ class Network:
             network_file (str/path): The file in which the prebuilt graph is stored. Must be a .gt file, .graphml file or .xml file.
         """
         if self.graph is not None:
-            sys.stderr.write("Network instance already contains a graph. Cannot load another graph.")
+            sys.stderr.write("Network instance already contains a graph. Cannot load another graph.\n\n")
             sys.exit(1)
         
         # Load the network from the specified file
@@ -254,8 +254,9 @@ class Network:
             self.graph = self.gt.load_graph(network_file)
             num_nodes = len(list(self.graph.vertices()))
             num_edges = len(list(self.graph.edges()))
+            sys.stderr.write(f"Loaded network with {num_nodes} nodes and {num_edges} edges with {self.backend}.\n\n")
             if self.backend == "NX":
-                sys.stderr.write("Network file provided is in .gt format and cannot be opened with networkx. Quitting.")
+                sys.stderr.write("Network file provided is in .gt format and cannot be opened with networkx. Quitting.\n\n")
                 sys.exit(1)
 
         elif file_extension in [".graphml", ".xml"]:
@@ -267,7 +268,8 @@ class Network:
                 self.graph = self.nx.read_graphml(network_file)
                 num_nodes = len(self.graph.nodes())
                 num_edges = len(self.graph.edges())
-            sys.stderr.write(f"Loaded network with {num_nodes} nodes and {num_edges} edges.\n")
+        
+            sys.stderr.write(f"Loaded network with {num_nodes} nodes and {num_edges} edges with {self.backend}.\n\n")
 
         # useful for cugraph, to be added in later
         # elif file_extension in [".csv", ".tsv", ".txt"]:
@@ -275,7 +277,7 @@ class Network:
         #     sys.exit(1)
 
         else:
-            sys.stderr.write("File format not recognised.")
+            sys.stderr.write("File format not recognised. Quitting...\n\n")
             sys.exit(1)
         
         # graph_df = cudf.read_csv(network_file, compression = "gzip")
@@ -289,50 +291,46 @@ class Network:
         #     genome_network.from_cudf_edgelist(graph_df, renumber = False)
         # sys.stderr.write("Network loaded: " + str(genome_network.number_of_vertices()) + " samples\n")
 
-        if self.backend == "NX":
-            new_vertex_labels = new_data_df[vertex_labels_column]
-            new_nodes_list = [(i, dict(id=new_vertex_labels[i])) for i in range(len(new_vertex_labels))]
-
-    def add_to_network(self, new_data_df, vertex_labels_column, weights):
+    def add_to_network(self, new_data_df, new_vertex_labels):
 
         if self.graph is None:
-            sys.stderr.write("No network found, cannot add data. Please load a network to add data to or construct a network with this data.")
+            sys.stderr.write("No network found, cannot add data. Please load a network to update or construct a network with this data.\n\n")
 
         if self.backend == "GT":
-            prev_graph_df = pd.DataFrame(columns=["source", "target", "vertex_labels"])
-            prev_graph_df["source"] = self.gt.edge_endpoint_property(self.graph, self.graph.vertex_index, "source")
-            prev_graph_df["target"] = self.gt.edge_endpoint_property(self.graph, self.graph.vertex_index, "target")
-            prev_graph_df["vertex_labels"] = list(self.graph.vp["id"][v] for v in self.graph.vertices())
+            self.graph.add_vertex(len(new_vertex_labels)) ## add new vertices
 
-            if weights is not None:
-                prev_graph_df["weights"] = list(self.graph.ep["weight"])
+            if self.weights is not None:
+                if "weights" not in new_data_df.columns: ## if existing graph has edge weights, but new data does not
+                    new_data_df["weights"] = 0.0 ## add a dummy column
+                ## update graph
+                eweight = self.graph.ep["weight"]
+                self.graph.add_edge_list(new_data_df.values, eprops = [eweight])
+            
+            elif self.weights is None: 
+                if "weights" in new_data_df.columns: ## if existing graph does not have edge weights, but new data does
+                    new_data_df.drop(columns=["weights"]) ## remove the weights column
+                ## update graph
+                self.graph.add_edge_list(new_data_df.values)
 
-            combined_df = pd.concat([new_data_df, prev_graph_df], ignore_index = True)
-
-            self.graph = self.gt.Graph(directed = False)
-            self.graph.add_vertex(len(set(combined_df["vertex_labels"])))
-            if weights is not None:
-                combined_df["weights"] = weights
-                eweight = self.graph.new_ep("float")
-                self.graph.add_edge_list(combined_df.values, eprops = [eweight]) ## add weighted edges
-                self.graph.edge_properties["weight"] = eweight
-            else:
-                self.graph.add_edge_list(combined_df.values) ## add edges
-
-            v_name_prop = self.graph.new_vp("string")
-            self.graph.vertex_properties["id"] = v_name_prop
-            for i in range(len([v for v in self.graph.vertices()])):
-                v_name_prop[self.graph.vertex(i)] = list(set(combined_df["vertex_labels"]))[i]
+            ## add vertex labels to new data
+            for idx, vertex_label in enumerate(new_vertex_labels):
+                self.graph.vp.id[idx + len(self.vertex_labels)] = vertex_label
 
         if self.backend == "NX":
-            new_vertex_labels = new_data_df[vertex_labels_column]
-            new_nodes_list = [(i, dict(id=new_vertex_labels[i])) for i in range(len(new_vertex_labels))]
+            new_nodes_list = [(i+len(self.vertex_labels), dict(id=new_vertex_labels[i])) for i in range(len(new_vertex_labels))]
+            self.graph.add_nodes_from(new_nodes_list) ## add new nodes
 
-            self.graph.add_nodes_from(new_nodes_list)
-            if weights is None:
-                self.graph.add_edges_from(new_data_df.values)
-            elif weights is not None:
+            if self.weights is not None:
+                if "weights" not in new_data_df.columns: ## if existing graph has edge weights, but new data does not
+                    new_data_df["weights"] = 0.0 ## add a dummy column
                 self.graph.add_weighted_edges_from(new_data_df.values)
+
+            elif self.weights is None:
+                if "weights" in new_data_df.columns: ## if existing graph does not have edge weights, but new data does
+                    new_data_df.drop(columns=["weights"]) ## remove the weights column
+                self.graph.add_edges_from(new_data_df.values)
+
+        self.vertex_labels += new_vertex_labels
 
     def _convert(self, intial_format, target_format):
         ### TODO call load_network, use network_to_edges, then call construct, add check to prevent computation in case of missing imports
