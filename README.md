@@ -19,6 +19,7 @@ os.environ["GRAPH_BACKEND"] = "GT" ## inside of your_script.py or in interactive
 
 export GRAPH_BACKEND=GT ## inside bash/shell terminal/environment
 ```
+Note that if both of the above methods (setting backend as argument to Network instance and setting an environment variable), setting backend as the argument will take priority.
 ## .construct
 
 Called on a Network object and produces a graph populated with edges.
@@ -92,7 +93,6 @@ example_loaded_network.load_network("path/to/network_file.graphml")
 
 # access loaded data using
 example_loaded_network.graph
-
 ```
 
 ## .save

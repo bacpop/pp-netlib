@@ -7,13 +7,6 @@ import scipy
 
 from pp_netlib.functions import clique_prune, clique_wrapper, construct_with_graphtool, construct_with_networkx, gt_get_ref_graph, gt_prune_cliques, summarise
 
-# env_backend = os.getenv("GRAPH_BACKEND")
-# if env_backend == "GT":
-#     import graph_tool.all as gt
-# elif env_backend == "NX":
-#     import networkx as nx
-
-
 class Network:
     def __init__(self, ref_list, query_list = None, outdir = "./", backend = None, use_gpu = False):
         """Initialises a graph object (based on graph-tool, networkx (TODO), or cugraph (TODO)). Produces a Network object.
@@ -22,7 +15,7 @@ class Network:
             ref_list (list): List of sequence names/identifiers (names/identifiers should be strings) which will be vertices in the graph
             query_list (list): List of sequence names/identifiers (names/identifiers) (TODO not used/necessary?)
             outdir (str): Path to output directory where graph files will be stored. Defaults to "./" (i.e. working directory) (TODO not used currently)
-            backend (str, optional): Which graphing module to use. Can be specified here (valid options: "GT", "NX", "CG") or as an environment variable. (TODO)
+            backend (str, optional): Which graphing module to use. Can be specified here (valid options: "GT", "NX", "CU") or as an environment variable. (TODO)
             use_gpu (bool, optional): Whether to use GPU and GPU python modules. Defaults to False.
                                       If set to True and if ImportErrors are raised due to missing moduiles, will revert to False.
 
@@ -67,22 +60,15 @@ class Network:
         elif self.backend == "NX":
             import networkx as nx
             self.nx = nx
-
-        if use_gpu:
+        elif self.backend == "CU":
             raise NotImplementedError("GPU graph not yet implemented")
-            use_gpu = False
-            # try:
-            #     import cupyx
-            #     import cugraph
-            #     import cudf
-            #     import cupy as cp
-            #     from numba import cuda
-            #     import rmm
-            #     use_gpu = True
-            # except ImportError or ModuleNotFoundError as e:
-            #     sys.stderr.write("Unable to load GPU libraries\n")
-            #     sys.exit(1)
-
+            # import cupyx
+            # import cugraph
+            # import cudf
+            # import cupy as cp
+            # from numba import cuda
+            # import rmm
+            # use_gpu = True
 
     def construct(self, network_data, weights = None): #, previous_network = None, adding_qq_dists = False, old_ids = None, previous_pkl = None):
         """Method called on Network object. Constructs a graph using either graph-tool, networkx (TODO), or cugraph(TODO)
@@ -209,7 +195,7 @@ class Network:
 
         sys.stderr.write(f"Pruned network has {num_nodes} nodes and {num_edges} edges.\n")
 
-    def get_summary(self, summary_file_prefix = None):
+    def get_summary(self, print_to_std = True, summary_file_prefix = None):
         """Method called on initialised and populated Network object. Prints summary of network properties to stderr and optionally to plain text file.
 
         Args:
@@ -220,14 +206,24 @@ class Network:
             RuntimeError: RuntimeError raised if no graph initialised.
         """
         # print some summaries
-        if not self.graph:
-            raise RuntimeError("Graph not found.")
+        if self.graph is None:
+            raise RuntimeError("Graph not constructed or loaded.")
 
-        summary_contents = summarise(self.graph, self.backend)
+        self.metrics, self.scores = summarise(self.graph, self.backend)
 
-        sys.stderr.write(summary_contents)
+        summary_contents = ("Network summary:\n" + "\n".join(["\tComponents\t\t\t\t" + str(self.metrics[0]),
+                                                    "\tDensity\t\t\t\t\t" + "{:.4f}".format(self.metrics[1]),
+                                                    "\tTransitivity\t\t\t\t" + "{:.4f}".format(self.metrics[2]),
+                                                    "\tMean betweenness\t\t\t" + "{:.4f}".format(self.metrics[3]),
+                                                    "\tWeighted-mean betweenness\t\t" + "{:.4f}".format(self.metrics[4]),
+                                                    "\tScore\t\t\t\t\t" + "{:.4f}".format(self.scores[0]),
+                                                    "\tScore (w/ betweenness)\t\t\t" + "{:.4f}".format(self.scores[1]),
+                                                    "\tScore (w/ weighted-betweenness)\t\t" + "{:.4f}".format(self.scores[2])])
+                                                    + "\n")
+        if print_to_std:
+            sys.stderr.write(summary_contents)
 
-         #################################
+        #################################
         #  write summary to plain text  #
         #################################
         if summary_file_prefix is not None:
@@ -248,13 +244,21 @@ class Network:
         Args:
             network_file (str/path): The file in which the prebuilt graph is stored. Must be a .gt file, .graphml file or .xml file.
         """
-        # Load the network from the specified file
         if self.graph is not None:
-            sys.stderr.write("This instance of the network object already has a graph made with the construct method. Please use another Network instance to load another graph from file.")
+            sys.stderr.write("Network instance already contains a graph. Cannot load another graph.")
             sys.exit(1)
-
+        
+        # Load the network from the specified file
         file_name, file_extension = os.path.splitext(network_file)
-        if file_extension in [".graphml", ".xml"]:
+        if file_extension == ".gt":
+            self.graph = self.gt.load_graph(network_file)
+            num_nodes = len(list(self.graph.vertices()))
+            num_edges = len(list(self.graph.edges()))
+            if self.backend == "NX":
+                sys.stderr.write("Network file provided is in .gt format and cannot be opened with networkx. Quitting.")
+                sys.exit(1)
+
+        elif file_extension in [".graphml", ".xml"]:
             if self.backend == "GT":
                 self.graph = self.gt.load_graph(network_file)
                 num_nodes = len(list(self.graph.vertices()))
@@ -263,37 +267,31 @@ class Network:
                 self.graph = self.nx.read_graphml(network_file)
                 num_nodes = len(self.graph.nodes())
                 num_edges = len(self.graph.edges())
+            sys.stderr.write(f"Loaded network with {num_nodes} nodes and {num_edges} edges.\n")
 
-        if file_extension == ".gt":
-            self.graph = self.gt.load_graph(network_file)
-            num_nodes = len(list(self.graph.vertices()))
-            num_edges = len(list(self.graph.edges()))
-            if self.backend == "NX":
-                sys.stderr.write("Network file provided is in .gt format Please use networkx as backend to laod this file.")
-        
-        sys.stderr.write(f"Loaded network with {num_nodes} nodes and {num_edges} edges.\n")
+        # useful for cugraph, to be added in later
+        # elif file_extension in [".csv", ".tsv", ".txt"]:
+        #     sys.stderr.write("The network file appears to be in tabular format, please load it as a dataframe and use the construct method to build a graph.\n")
+        #     sys.exit(1)
 
-        if file_extension in [".csv", ".tsv", ".txt"]:
-            sys.stderr.write("The network file appears to be in tabular format, please load it as a dataframe and use the construct method to build a graph.\n")
+        else:
+            sys.stderr.write("File format not recognised.")
             sys.exit(1)
-
-
-        # if not self.use_gpu:
-        #     genome_network = gt.load_graph(network_file)
-        #     sys.stderr.write("Network loaded: " + str(len(list(genome_network.vertices()))) + " samples\n")
+        
+        # graph_df = cudf.read_csv(network_file, compression = "gzip")
+        # if "src" in graph_df.columns:
+        #     graph_df.rename(columns={"src": "source", "dst": "destination"}, inplace=True)
+        # genome_network = cugraph.Graph()
+        # if "weights" in graph_df.columns:
+        #     graph_df = graph_df[["source", "destination", "weights"]]
+        #     genome_network.from_cudf_edgelist(graph_df, edge_attr = "weights", renumber = False)
         # else:
-        #     graph_df = cudf.read_csv(network_file, compression = "gzip")
-        #     if "src" in graph_df.columns:
-        #         graph_df.rename(columns={"src": "source", "dst": "destination"}, inplace=True)
-        #     genome_network = cugraph.Graph()
-        #     if "weights" in graph_df.columns:
-        #         graph_df = graph_df[["source", "destination", "weights"]]
-        #         genome_network.from_cudf_edgelist(graph_df, edge_attr = "weights", renumber = False)
-        #     else:
-        #         genome_network.from_cudf_edgelist(graph_df, renumber = False)
-        #     sys.stderr.write("Network loaded: " + str(genome_network.number_of_vertices()) + " samples\n")
+        #     genome_network.from_cudf_edgelist(graph_df, renumber = False)
+        # sys.stderr.write("Network loaded: " + str(genome_network.number_of_vertices()) + " samples\n")
 
-        # return genome_network
+        if self.backend == "NX":
+            new_vertex_labels = new_data_df[vertex_labels_column]
+            new_nodes_list = [(i, dict(id=new_vertex_labels[i])) for i in range(len(new_vertex_labels))]
 
     def add_to_network(self, new_data_df, vertex_labels_column, weights):
 
@@ -342,9 +340,12 @@ class Network:
         if intial_format == "cugraph":
             cugraph_dataframe = cugraph.to_pandas_edgelist(self.graph)
 
+
+
         if target_format == "cugraph" and not self.use_gpu:
             sys.stderr.write("You have asked for your graph to be converted to cugraph format, but your system/environment seems to be missing gpu related imports. Converting anyway...")
 
+        
 
         print(f"converting from {intial_format} to {target_format}")
         return
@@ -364,6 +365,9 @@ class Network:
         Raises:
             NotImplementedError: If graph_tool is selected a backend,
         """
+        if self.graph is None:
+            raise RuntimeError("Graph not constructed or loaded.")
+
         outdir = self.outdir
         if self.backend == "GT":
             if file_format is None:
@@ -377,14 +381,6 @@ class Network:
         if self.backend == "NX":
             self.nx.write_graphml(self.graph, os.path.join(outdir, file_name+".graphml"))
 
-
-        # file_name = outdir + "/" + prefix
-        # if suffix is not None:
-        #     file_name = file_name + suffix
-        # if not self.use_gpu:
-        #     if use_graphml:
-        #         self.graph.save(file_name + ".graphml", fmt = "graphml")
-        #     else:
-        #         self.graph.save(file_name + ".gt", fmt = "gt")
-        # else:
+        # useful with cugraph, to be added in later
+        # if self.backend == "CU":
         #     self.graph.to_pandas_edgelist().to_csv(file_name + ".csv.gz", compression="gzip", index = False)
