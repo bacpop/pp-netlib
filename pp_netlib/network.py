@@ -5,7 +5,8 @@ import numpy as np
 import pandas as pd
 import scipy
 
-from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, gt_clique_prune, gt_get_ref_graph, summarise
+from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, summarise
+from pp_netlib.prune_functions import gt_clique_prune, gt_get_ref_graph
 
 class Network:
     def __init__(self, ref_list, query_list = [], outdir = "./", backend = None, use_gpu = False):
@@ -185,7 +186,7 @@ class Network:
             #     ref_verts = pool.map([component for component in set(components)], clique_prune, graph=self.graph, reference_indices=set(), component_list=components)
 
 
-            self.graph = gt_get_ref_graph(self.graph, reference_vertices, self.ref_list)
+            self.graph = gt_get_ref_graph(self.graph, reference_vertices, list(self.graph.vp["id"][v] for v in self.graph.vertices()))
             num_nodes = len(list(self.graph.vertices()))
             num_edges = len(list(self.graph.edges()))
 

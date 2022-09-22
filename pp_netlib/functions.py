@@ -142,7 +142,7 @@ def summarise(graph, backend):
 
     Args:
         graph (Network object): The graph for which to obtain summary metrics
-        backend (str): The tool used to build graph ("GT", "NX", or "CG"(TODO))
+        backend (str): The tool used to build graph ("GT", "NX", or "CU"(TODO))
 
     Returns:
         summary_contents (formatted str): Graph summary metrics formatted to print to stderr
