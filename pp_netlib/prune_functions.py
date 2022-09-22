@@ -48,14 +48,14 @@ def gt_clique_prune(component, graph, reference_indices, components_list):
 
     return ref_list
 
-def print_clusters(graph, vertex_labels, out_prefix=None, old_cluster_file=None, external_cluster_csv=None, printRef=True, print_csv=True, clustering_type="combined", write_unwords=True, use_gpu = False):
+def print_clusters(graph, vertex_labels, out_prefix=None, old_cluster_file=None, external_cluster_csv=None, print_ref=True, print_csv=True, clustering_type="combined", write_unwords=True, use_gpu = False):
 
     import operator
     import graph_tool.all as gt
     from scipy.stats import rankdata
     from pp_netlib.utils import gen_unword, read_isolate_type_from_csv, print_external_clusters
 
-    if old_cluster_file == None and printRef == False:
+    if old_cluster_file == None and print_ref == False:
         raise RuntimeError("Trying to print query clusters with no query sequences")
     if write_unwords and not print_csv:
         write_unwords = False
@@ -181,7 +181,7 @@ def print_clusters(graph, vertex_labels, out_prefix=None, old_cluster_file=None,
 
             # iterate through cluster dictionary sorting by value using above custom sort order
             for cluster_member, cluster_name in sorted(clustering.items(), key=lambda i:freq_order.index(i[1])):
-                if printRef or cluster_member not in old_names:
+                if print_ref or cluster_member not in old_names:
                     cluster_file.write(",".join((cluster_member, str(cluster_name))) + "\n")
                 if write_unwords and cluster_member in cluster_unword:
                     unword_file.write(",".join((cluster_member, cluster_unword[cluster_member])) + "\n")
@@ -190,13 +190,21 @@ def print_clusters(graph, vertex_labels, out_prefix=None, old_cluster_file=None,
                 unword_file.close()
 
         if external_cluster_csv is not None:
-            print_external_clusters(new_clusters, external_cluster_csv, out_prefix, old_names, printRef)
+            print_external_clusters(new_clusters, external_cluster_csv, out_prefix, old_names, print_ref)
 
     return clustering 
 
-def gt_get_ref_graph(graph, ref_indices, vertex_labels):
+def gt_get_ref_graph(graph, ref_indices, vertex_labels, type_isolate):
 
     import graph_tool.all as gt
+
+    if type_isolate is not None:
+        type_isolate_index = vertex_labels.index(type_isolate)
+    else:
+        type_isolate_index = None
+    
+    if type_isolate_index is not None and type_isolate_index not in ref_indices:
+            ref_indices.add(type_isolate_index)
 
     reference_vertex = graph.new_vertex_property('bool')
     for n, vertex in enumerate(graph.vertices()):

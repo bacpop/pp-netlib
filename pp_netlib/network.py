@@ -170,7 +170,7 @@ class Network:
         #     self.edges = [edge for edge in self.graph.edges()]
 
 
-    def prune(self):
+    def prune(self, type_isolate = None):
 
         if self.backend == "GT":
             reference_vertices = set()
@@ -186,7 +186,7 @@ class Network:
             #     ref_verts = pool.map([component for component in set(components)], clique_prune, graph=self.graph, reference_indices=set(), component_list=components)
 
 
-            self.graph = gt_get_ref_graph(self.graph, reference_vertices, list(self.graph.vp["id"][v] for v in self.graph.vertices()))
+            self.graph = gt_get_ref_graph(self.graph, reference_vertices, list(self.graph.vp["id"][v] for v in self.graph.vertices()), type_isolate)
             num_nodes = len(list(self.graph.vertices()))
             num_edges = len(list(self.graph.edges()))
 
