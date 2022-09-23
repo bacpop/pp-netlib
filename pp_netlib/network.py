@@ -6,7 +6,7 @@ import pandas as pd
 import scipy
 
 from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, summarise
-from pp_netlib.prune_functions import gt_clique_prune, gt_get_ref_graph
+from pp_netlib.prune_functions import gt_clique_prune, gt_get_ref_graph, nx_clique_prune
 
 class Network:
     def __init__(self, ref_list, query_list = [], outdir = "./", backend = None, use_gpu = False):
@@ -185,14 +185,28 @@ class Network:
             # with Pool as pool:
             #     ref_verts = pool.map([component for component in set(components)], clique_prune, graph=self.graph, reference_indices=set(), component_list=components)
 
+        if self.backend == "NX":
+            for idx, c in enumerate(self.nx.connected_components(self.graph)):
+                for v in c:
+                    self.graph.nodes[v]["comp_membership"] = idx
+            reference_vertices = set()
+            components = list(c for c in self.nx.connected_components(self.graph))
 
-            self.graph = gt_get_ref_graph(self.graph, reference_vertices, list(self.graph.vp["id"][v] for v in self.graph.vertices()), type_isolate)
-            num_nodes = len(list(self.graph.vertices()))
-            num_edges = len(list(self.graph.edges()))
+            for component in self.nx.connected_components(self.graph):
+                reference_indices = nx_clique_prune(component, self.graph, set(), components)
+                reference_vertices.update(reference_indices)
 
-
+        if self.backend == "GT":
+            labels = list(self.graph.vp["id"][v] for v in self.graph.vertices())
+            self.graph = gt_get_ref_graph(self.graph, reference_vertices, labels, type_isolate, backend=self.backend)
+            num_nodes = self.graph.num_vertices()
+            num_edges = self.graph.num_edges()
         elif self.backend == "NX":
-            pass ##TODO
+            
+            labels = list((self.nx.get_node_attributes(self.graph, "id")).values())
+            self.graph = gt_get_ref_graph(self.graph, reference_vertices, labels, type_isolate, backend=self.backend)
+            num_nodes = self.graph.number_of_nodes()
+            num_edges = self.graph.number_of_edges()
 
         sys.stderr.write(f"Pruned network has {num_nodes} nodes and {num_edges} edges.\n\n")
 

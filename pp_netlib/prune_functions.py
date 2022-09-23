@@ -1,5 +1,6 @@
 import sys
 from collections import Counter, defaultdict
+from turtle import back
 
 def get_gt_clique_refs(graph, reference_indices:set()):
     """Recursively prune a network of its cliques. Returns one vertex from
@@ -48,12 +49,53 @@ def gt_clique_prune(component, graph, reference_indices, components_list):
 
     return ref_list
 
-def print_clusters(graph, vertex_labels, out_prefix=None, old_cluster_file=None, external_cluster_csv=None, print_ref=True, print_csv=True, clustering_type="combined", write_unwords=True, use_gpu = False):
+def get_nx_clique_refs(graph, reference_indices = set()):
+    import networkx as nx
+    cliques = nx.find_cliques(graph)
+
+    try:
+        clique = frozenset(next(cliques))
+        if clique.isdisjoint(reference_indices):
+            reference_indices.add(list(clique)[0])
+        
+        subgraph = graph.subgraph([v not in clique for v in graph.nodes()])
+        if subgraph.number_of_nodes() > 1:
+            get_nx_clique_refs(subgraph, reference_indices)
+        elif subgraph.number_of_nodes() == 1:
+            reference_indices.add(subgraph.nodes()[0])
+    except StopIteration:
+        pass
+
+    return reference_indices
+
+def nx_clique_prune(component, graph, reference_indices, components_list):
+
+    import networkx as nx
+
+    sys.setrecursionlimit(3000)
+    subgraph = graph.subgraph(component)
+    refs = reference_indices.copy()
+    if len(subgraph.nodes()) <= 2:
+        refs.add(list(subgraph.nodes())[0])
+        ref_list = refs
+    else:
+        ref_list = get_nx_clique_refs(subgraph, refs)
+
+    refs_list = set(int(ref.replace("n", "")) for ref in ref_list)
+
+    return refs_list
+
+def print_clusters(graph, vertex_labels, backend, out_prefix=None, old_cluster_file=None, external_cluster_csv=None, print_ref=True, print_csv=True, clustering_type="combined", write_unwords=True, use_gpu = False):
 
     import operator
-    import graph_tool.all as gt
+    import numpy as np
     from scipy.stats import rankdata
     from pp_netlib.utils import gen_unword, read_isolate_type_from_csv, print_external_clusters
+    if backend == "GT":
+        import graph_tool.all as gt
+    elif backend == "NX":
+        import networkx as nx
+    
 
     if old_cluster_file == None and print_ref == False:
         raise RuntimeError("Trying to print query clusters with no query sequences")
@@ -73,14 +115,24 @@ def print_clusters(graph, vertex_labels, out_prefix=None, old_cluster_file=None,
         #     component_rank = np.argmax(component_rank_bool.to_array())
         #     newClusters[component_rank].add(isolate_name)
     else:
-        component_assignments, component_frequencies = gt.label_components(graph)
+        if backend == "GT":
+            component_assignments, component_frequencies = gt.label_components(graph)
+            component_assignments = list(component_assignments)
+            component_frequencies = list(component_frequencies)
+
+        elif backend == "NX":
+            component_assignments = list((nx.get_node_attributes(graph, "comp_membership")).values())
+            component_frequencies = list(len(c) for c in nx.connected_components(graph))
+
         component_frequency_ranks = len(component_frequencies) - rankdata(component_frequencies, method = "ordinal").astype(int)
         # use components to determine new clusters
         new_clusters = [set() for rank in range(len(component_frequency_ranks))]
+
         for isolate_index, isolate_name in enumerate(vertex_labels):
-            component = component_assignments.a[isolate_index]
+            component = component_assignments[isolate_index]
             component_rank = component_frequency_ranks[component]
             new_clusters[component_rank].add(isolate_name)
+
 
     old_names = set()
 
@@ -194,9 +246,12 @@ def print_clusters(graph, vertex_labels, out_prefix=None, old_cluster_file=None,
 
     return clustering 
 
-def gt_get_ref_graph(graph, ref_indices, vertex_labels, type_isolate):
+def gt_get_ref_graph(graph, ref_indices, vertex_labels, type_isolate, backend):
 
-    import graph_tool.all as gt
+    if backend == "GT":
+        import graph_tool.all as gt
+    elif backend == "NX":
+        import networkx as nx
 
     if type_isolate is not None:
         type_isolate_index = vertex_labels.index(type_isolate)
@@ -206,18 +261,21 @@ def gt_get_ref_graph(graph, ref_indices, vertex_labels, type_isolate):
     if type_isolate_index is not None and type_isolate_index not in ref_indices:
             ref_indices.add(type_isolate_index)
 
-    reference_vertex = graph.new_vertex_property('bool')
-    for n, vertex in enumerate(graph.vertices()):
-        if n in ref_indices:
-            reference_vertex[vertex] = True
-        else:
-            reference_vertex[vertex] = False
+    if backend == "GT":
+        reference_vertex = graph.new_vertex_property('bool')
+        for n, vertex in enumerate(graph.vertices()):
+            if n in ref_indices:
+                reference_vertex[vertex] = True
+            else:
+                reference_vertex[vertex] = False
 
-    ref_graph = gt.GraphView(graph, vfilt = reference_vertex)
-    ref_graph = gt.Graph(ref_graph, prune = True)
-
+        ref_graph = gt.GraphView(graph, vfilt = reference_vertex)
+        ref_graph = gt.Graph(ref_graph, prune = True)
+    
+    elif backend == "NX":
+        ref_graph = graph.subgraph(["n"+str(ri) for ri in ref_indices])
     ###
-    clusters_in_full_graph = print_clusters(graph, vertex_labels, print_csv=False)
+    clusters_in_full_graph = print_clusters(graph, vertex_labels, backend = backend, print_csv=False)
     reference_clusters_in_full_graph = defaultdict(set)
     for reference_index in ref_indices:
         try:
@@ -227,12 +285,15 @@ def gt_get_ref_graph(graph, ref_indices, vertex_labels, type_isolate):
 
     # Calculate the component membership within the reference graph
     ref_order = [name for idx, name in enumerate(vertex_labels) if idx in frozenset(ref_indices)]
-    clusters_in_reference_graph = print_clusters(ref_graph, ref_order, print_csv=False)
+    clusters_in_reference_graph = print_clusters(ref_graph, ref_order, backend = backend, print_csv=False)
     # Record the components/clusters the references are in the reference graph
     # dict: name: ref_cluster
     reference_clusters_in_reference_graph = {}
     for reference_name in ref_order:
-        reference_clusters_in_reference_graph[reference_name] = clusters_in_reference_graph[reference_name]
+        try:
+            reference_clusters_in_reference_graph[reference_name] = clusters_in_reference_graph[reference_name]
+        except IndexError:
+            pass
 
     # Check if multi-reference components have been split as a validation test
     # First iterate through clusters
@@ -249,16 +310,30 @@ def gt_get_ref_graph(graph, ref_indices, vertex_labels, type_isolate):
                     component_j = reference_clusters_in_reference_graph[vertex_labels[check[j]]]
                     if component_i != component_j:
                         network_update_required = True
-                        vertex_list, edge_list = gt.shortest_path(graph, check[i], check[j])
-                        # update reference list
-                        for vertex in vertex_list:
-                            reference_vertex[vertex] = True
-                            ref_indices.add(int(vertex))
+                        if backend == "GT":
+                            vertex_list, edge_list = gt.shortest_path(graph, check[i], check[j])
+                            for vertex in vertex_list:
+                                reference_vertex[vertex] = True
+                                ref_indices.add(int(vertex))
+                        elif backend == "NX":
+                            print(check[i], check[j])
+                            vertex_list = nx.shortest_path(graph, "n"+str(check[i]), "n"+str(check[j]))
+                            print(vertex_list)
+                            for vertex in vertex_list:
+                                print(vertex)
+                                vert_idx = vertex.replace("n", "")
+                                print(ref_indices)
+                                ref_indices.add(int(vert_idx))
+                                print(ref_indices)
+
 
     # update reference graph if vertices have been added
     if network_update_required:
-        ref_graph = gt.GraphView(graph, vfilt = reference_vertex)
-        ref_graph = gt.Graph(ref_graph, prune = True) # https://stackoverflow.com/questions/30839929/graph-tool-graphview-object
+        if backend == "GT":
+            ref_graph = gt.GraphView(graph, vfilt = reference_vertex)
+            ref_graph = gt.Graph(ref_graph, prune = True) # https://stackoverflow.com/questions/30839929/graph-tool-graphview-object
+        elif backend == "NX":
+            ref_graph = graph.subgraph(["n"+str(ri) for ri in ref_indices])
 
     # Order found references as in sketch files
     #reference_names = [vertex_labels[int(x)] for x in sorted(ref_indices)]

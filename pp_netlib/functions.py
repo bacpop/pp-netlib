@@ -483,7 +483,7 @@ def get_nx_clique_refs(graph, reference_indices = set()):
 
     return reference_indices
 
-def nx_prune_cliques(graph, reference_indices, component, components_list):
+def nx_prune_cliques(component, graph, reference_indices, components_list):
 
     import networkx as nx
 
