@@ -6,7 +6,8 @@ import pandas as pd
 import scipy
 
 from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, summarise
-from pp_netlib.prune_functions import gt_clique_prune, gt_get_ref_graph, nx_clique_prune
+from pp_netlib.gt_prune import gt_clique_prune, gt_get_ref_graph
+from pp_netlib.nx_prune import nx_get_clique_refs, nx_get_connected_refs
 
 class Network:
     def __init__(self, ref_list, query_list = [], outdir = "./", backend = None, use_gpu = False):
@@ -175,38 +176,46 @@ class Network:
         if self.backend == "GT":
             reference_vertices = set()
             components = self.gt.label_components(self.graph)[0].a
-            #reference_vertices = gt_prune_cliques(graph=self.graph, reference_indices=set(), components_list=(components))
 
             for component in set(components):
                 reference_indices = gt_clique_prune(component, self.graph, set(), components)
                 reference_vertices.update(reference_indices)
-                #print(reference_vertices)
 
-            # with Pool as pool:
-            #     ref_verts = pool.map([component for component in set(components)], clique_prune, graph=self.graph, reference_indices=set(), component_list=components)
+            labels = list(self.graph.vp["id"][v] for v in self.graph.vertices())
+            self.graph = gt_get_ref_graph(self.graph, reference_vertices, labels, type_isolate, backend=self.backend)
+            num_nodes = self.graph.num_vertices()
+            num_edges = self.graph.num_edges()
 
         if self.backend == "NX":
             for idx, c in enumerate(self.nx.connected_components(self.graph)):
                 for v in c:
                     self.graph.nodes[v]["comp_membership"] = idx
-            reference_vertices = set()
-            components = list(c for c in self.nx.connected_components(self.graph))
 
-            for component in self.nx.connected_components(self.graph):
-                reference_indices = nx_clique_prune(component, self.graph, set(), components)
-                reference_vertices.update(reference_indices)
+            reference_vertices = nx_get_clique_refs(self.graph, set())
 
-        if self.backend == "GT":
-            labels = list(self.graph.vp["id"][v] for v in self.graph.vertices())
-            self.graph = gt_get_ref_graph(self.graph, reference_vertices, labels, type_isolate, backend=self.backend)
-            num_nodes = self.graph.num_vertices()
-            num_edges = self.graph.num_edges()
-        elif self.backend == "NX":
-            
-            labels = list((self.nx.get_node_attributes(self.graph, "id")).values())
-            self.graph = gt_get_ref_graph(self.graph, reference_vertices, labels, type_isolate, backend=self.backend)
+            num_refs = len(reference_vertices)
+            print(f"reference_vertices = {reference_vertices}, num_refs = {num_refs}")
+            updated_refs = nx_get_connected_refs(self.graph, reference_vertices)
+            print(f"\n\nupdated_refs = {updated_refs}\n\n")
+            self.graph.remove_nodes_from([node for node in self.graph.nodes() if node not in updated_refs])
+            # ref_indices = nx_extract_references(self.graph, labels)
+            # print(ref_indices)
+            # self.graph = self.graph.subgraph(ref_indices).copy()
+
             num_nodes = self.graph.number_of_nodes()
             num_edges = self.graph.number_of_edges()
+
+
+        #     components = list((self.nx.get_node_attributes(self.graph, "comp_membership")).values())
+
+        #     for component in components:
+        #         reference_indices = nx_clique_prune(component, self.graph, set(), components)
+        #         reference_vertices.update(reference_indices)
+            
+        #     labels = list((self.nx.get_node_attributes(self.graph, "id")).values())
+        #     self.graph = gt_get_ref_graph(self.graph, reference_vertices, labels, type_isolate, backend=self.backend)
+        #     num_nodes = self.graph.number_of_nodes()
+        #     num_edges = self.graph.number_of_edges()
 
         sys.stderr.write(f"Pruned network has {num_nodes} nodes and {num_edges} edges.\n\n")
 

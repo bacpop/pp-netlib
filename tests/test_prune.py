@@ -71,5 +71,5 @@ def test_nx_prune():
 
 
 if __name__ == "__main__":
-    test_gt_prune()
+    #test_gt_prune()
     test_nx_prune()
