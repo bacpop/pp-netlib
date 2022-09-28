@@ -7,7 +7,7 @@ import scipy
 
 from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, summarise
 from pp_netlib.gt_prune import gt_clique_prune, gt_get_ref_graph
-from pp_netlib.nx_prune import nx_get_clique_refs, nx_get_connected_refs
+from pp_netlib.nx_prune import alt_nx_get_clique_refs, nx_get_clique_refs, nx_get_connected_refs
 
 class Network:
     def __init__(self, ref_list, query_list = [], outdir = "./", backend = None, use_gpu = False):
@@ -170,13 +170,18 @@ class Network:
             #     for v in c:
             #         self.graph.nodes[v]["comp_membership"] = idx
 
-            reference_vertices = nx_get_clique_refs(self.graph, set())
+            reference_vertices = alt_nx_get_clique_refs(self.graph, set())
 
             num_refs = len(reference_vertices)
             print(f"reference_vertices = {reference_vertices}, num_refs = {num_refs}")
             updated_refs = nx_get_connected_refs(self.graph, reference_vertices)
+            
+            type_idx = [i[0] for i in list(self.graph.nodes(data="id")) if i[1] == type_isolate]
+            print(f"\n\n\ntype_idx = {type_idx}\n\n\n")
+            updated_refs.add(type_idx[0])
             print(f"\n\nupdated_refs = {updated_refs}\n\n")
             self.graph.remove_nodes_from([node for node in self.graph.nodes() if node not in updated_refs])
+            
 
             num_nodes = self.graph.number_of_nodes()
             num_edges = self.graph.number_of_edges()

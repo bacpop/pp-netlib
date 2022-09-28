@@ -60,3 +60,16 @@ def nx_get_connected_refs(graph, references):
     #references = [x for x in vertex_labels if x in references]
 
     return references
+
+def alt_nx_get_clique_refs(graph, references):
+    nested_list = []
+    for component in nx.connected_components(graph):
+        print(f"component = {component}")
+        subgraph = graph.subgraph(component)
+        subgraph_refs = nx_get_clique_refs(subgraph, references)
+        print(subgraph_refs)
+        nested_list.append(subgraph_refs)
+
+    refs = set([entry for sublist in nested_list for entry in sublist])
+
+    return refs
