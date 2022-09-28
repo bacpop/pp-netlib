@@ -16,8 +16,8 @@ class Network:
         Args:
             ref_list (list): List of sequence names/identifiers (names/identifiers should be strings) which will be vertices in the graph
             query_list (list): List of sequence names/identifiers (names/identifiers) (TODO not used/necessary?)
-            outdir (str): Path to output directory where graph files will be stored. Defaults to "./" (i.e. working directory) (TODO not used currently)
-            backend (str, optional): Which graphing module to use. Can be specified here (valid options: "GT", "NX", "CU") or as an environment variable. (TODO)
+            outdir (str): Path to output directory where graph files will be stored. Defaults to "./" (i.e. working directory)
+            backend (str, optional): Which graphing module to use. Can be specified here (valid options: "GT", "NX", "CU") or as an environment variable.
             use_gpu (bool, optional): Whether to use GPU and GPU python modules. Defaults to False.
                                       If set to True and if ImportErrors are raised due to missing moduiles, will revert to False.
 
@@ -37,7 +37,7 @@ class Network:
             example_graph.save(*save_args) ## save your graph to file in outdir
             ```
 
-            Graphing backend can alternatively be set as follows: (TODO To be discussed)
+            Graphing backend can alternatively be set as follows:
             ```
             os.environ["GRAPH_BACKEND"] = "GT" ## inside of your_script.py or in interactive python terminal
 
@@ -73,7 +73,7 @@ class Network:
             # use_gpu = True
 
     def construct(self, network_data, weights = None): #, previous_network = None, adding_qq_dists = False, old_ids = None, previous_pkl = None):
-        """Method called on Network object. Constructs a graph using either graph-tool, networkx (TODO), or cugraph(TODO)
+        """Method called on Network object. Constructs a graph using either graph-tool, networkx, or cugraph(TODO)
 
         Args:
             network_data (dataframe OR edge list OR sparse coordinate matrix): Data containing record of edges in the graph.
@@ -149,27 +149,6 @@ class Network:
         elif self.backend == "NX":
             self.graph = construct_with_networkx(network_data=network_data, vertex_labels=self.vertex_labels, weights=weights)
 
-        ## keeping this section here for now; might be useful in add_to_network method
-        # ########################
-        # ####  PREV NETWORK  ####
-        # ########################
-        # if previous_network is not None:
-        #     prev_edges = []
-        #     if weights is not None:
-        #         extra_sources, extra_targets, extra_weights = process_previous_network(previous_network = previous_network, adding_qq_dists = adding_qq_dists, old_ids = old_ids, previous_pkl = previous_pkl, vertex_labels = vertex_labels, weights = (weights is not None), use_gpu = use_gpu)
-        #         for (src, dest, weight) in zip(extra_sources, extra_targets, extra_weights):
-        #                 prev_edges.append((src, dest, weight))
-
-        #     else:
-        #         extra_sources, extra_targets = process_previous_network(previous_network = previous_network, adding_qq_dists = adding_qq_dists, old_ids = old_ids, previous_pkl = previous_pkl, vertex_labels = vertex_labels, weights = (weights is not None), use_gpu = use_gpu)
-        #         for (src, dest, weight) in zip(extra_sources, extra_targets):
-        #                 prev_edges.append((src, dest))
-
-
-        #     self.graph.add_edge_list(prev_edges) ## add previous edge list to newly made graph
-
-        #     self.edges = [edge for edge in self.graph.edges()]
-
 
     def prune(self, type_isolate = None):
 
@@ -187,9 +166,9 @@ class Network:
             num_edges = self.graph.num_edges()
 
         if self.backend == "NX":
-            for idx, c in enumerate(self.nx.connected_components(self.graph)):
-                for v in c:
-                    self.graph.nodes[v]["comp_membership"] = idx
+            # for idx, c in enumerate(self.nx.connected_components(self.graph)):
+            #     for v in c:
+            #         self.graph.nodes[v]["comp_membership"] = idx
 
             reference_vertices = nx_get_clique_refs(self.graph, set())
 
@@ -198,24 +177,9 @@ class Network:
             updated_refs = nx_get_connected_refs(self.graph, reference_vertices)
             print(f"\n\nupdated_refs = {updated_refs}\n\n")
             self.graph.remove_nodes_from([node for node in self.graph.nodes() if node not in updated_refs])
-            # ref_indices = nx_extract_references(self.graph, labels)
-            # print(ref_indices)
-            # self.graph = self.graph.subgraph(ref_indices).copy()
 
             num_nodes = self.graph.number_of_nodes()
             num_edges = self.graph.number_of_edges()
-
-
-        #     components = list((self.nx.get_node_attributes(self.graph, "comp_membership")).values())
-
-        #     for component in components:
-        #         reference_indices = nx_clique_prune(component, self.graph, set(), components)
-        #         reference_vertices.update(reference_indices)
-            
-        #     labels = list((self.nx.get_node_attributes(self.graph, "id")).values())
-        #     self.graph = gt_get_ref_graph(self.graph, reference_vertices, labels, type_isolate, backend=self.backend)
-        #     num_nodes = self.graph.number_of_nodes()
-        #     num_edges = self.graph.number_of_edges()
 
         sys.stderr.write(f"Pruned network has {num_nodes} nodes and {num_edges} edges.\n\n")
 
@@ -359,13 +323,13 @@ class Network:
     def _convert(self, intial_format, target_format):
         ### TODO call load_network, use network_to_edges, then call construct, add check to prevent computation in case of missing imports
 
-        if intial_format == "cugraph":
-            cugraph_dataframe = cugraph.to_pandas_edgelist(self.graph)
+        # if intial_format == "cugraph":
+        #     cugraph_dataframe = cugraph.to_pandas_edgelist(self.graph)
 
 
 
-        if target_format == "cugraph" and not self.use_gpu:
-            sys.stderr.write("You have asked for your graph to be converted to cugraph format, but your system/environment seems to be missing gpu related imports. Converting anyway...")
+        # if target_format == "cugraph" and not self.use_gpu:
+        #     sys.stderr.write("You have asked for your graph to be converted to cugraph format, but your system/environment seems to be missing gpu related imports. Converting anyway...")
 
         
 

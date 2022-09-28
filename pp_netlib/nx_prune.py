@@ -7,7 +7,7 @@ def nx_get_clique_refs(graph, references):
     # iterate through cliques
     for clique in cliques:
         alreadyRepresented = 0
-        for node in sorted(clique): ## sorted each clique makig the result consistent over multiple function calls. Possibly slow.
+        for node in clique: ## sorted each clique makig the result consistent over multiple function calls. Possibly slow.
             if node in references:
                 alreadyRepresented = 1
                 break
