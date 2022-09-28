@@ -152,6 +152,9 @@ class Network:
 
     def prune(self, type_isolate = None):
 
+        if self.graph is None:
+            raise RuntimeError("Graph not constructed or loaded.")
+
         if self.backend == "GT":
             reference_vertices = set()
             components = self.gt.label_components(self.graph)[0].a
