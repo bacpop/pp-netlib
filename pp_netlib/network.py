@@ -166,20 +166,16 @@ class Network:
             num_edges = self.graph.num_edges()
 
         if self.backend == "NX":
-            # for idx, c in enumerate(self.nx.connected_components(self.graph)):
-            #     for v in c:
-            #         self.graph.nodes[v]["comp_membership"] = idx
-
             reference_vertices = alt_nx_get_clique_refs(self.graph, set())
 
             num_refs = len(reference_vertices)
-            print(f"reference_vertices = {reference_vertices}, num_refs = {num_refs}")
+            # print(f"reference_vertices = {reference_vertices}, num_refs = {num_refs}")
             updated_refs = nx_get_connected_refs(self.graph, reference_vertices)
-            
+
             type_idx = [i[0] for i in list(self.graph.nodes(data="id")) if i[1] == type_isolate]
-            print(f"\n\n\ntype_idx = {type_idx}\n\n\n")
+            # print(f"\n\n\ntype_idx = {type_idx}\n\n\n")
             updated_refs.add(type_idx[0])
-            print(f"\n\nupdated_refs = {updated_refs}\n\n")
+            # print(f"\n\nupdated_refs = {updated_refs}\n\n")
             self.graph.remove_nodes_from([node for node in self.graph.nodes() if node not in updated_refs])
             
 

@@ -28,5 +28,8 @@ python tests/test_summarise.py
 ## test saving and loading
 python tests/test_save_load.py
 
-## test_add_to_network method
+## test add_to_network method
 python tests/test_add.py
+
+## test prune method
+python tests/test_prune.py

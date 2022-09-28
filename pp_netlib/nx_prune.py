@@ -39,7 +39,7 @@ def nx_get_connected_refs(graph, references):
         ref_G.remove_nodes_from([node for node in graph.nodes() if node not in references])
 
         for multi_ref_cluster in multi_ref_clusters:
-            print(f"multi_ref_clustr = {multi_ref_cluster}")
+            # print(f"multi_ref_clustr = {multi_ref_cluster}")
             # Get a list of nodes that need to be in the same component
             check = []
             for reference in references:
@@ -53,21 +53,20 @@ def nx_get_connected_refs(graph, references):
                     # Add intermediate nodes
                     if check[j] not in component:
                         new_path = nx.shortest_path(graph, check[i], check[j])
+                        # print(f"new_path = {new_path}")
                         for node in new_path:
                             references.add(node)
 
-    print(f"references = {references}")
-    #references = [x for x in vertex_labels if x in references]
-
+    # print(f"references = {references}")
     return references
 
 def alt_nx_get_clique_refs(graph, references):
     nested_list = []
     for component in nx.connected_components(graph):
-        print(f"component = {component}")
+        # print(f"component = {component}")
         subgraph = graph.subgraph(component)
         subgraph_refs = nx_get_clique_refs(subgraph, references)
-        print(subgraph_refs)
+        # print(subgraph_refs)
         nested_list.append(subgraph_refs)
 
     refs = set([entry for sublist in nested_list for entry in sublist])
