@@ -26,13 +26,13 @@ def test_gt_prune():
 
     print(f"{sample_pruned_components} components in sample pruned graph.")
     sample_gt_graph.prune("6925_1_57")
-    test_pruned_components = len(set(gt.label_components(sample_gt_graph.graph)[0].a))
+    test_pruned_components = len(set(gt.label_components(sample_gt_graph.ref_graph)[0].a))
     print(f"{test_pruned_components} components in test pruned graph.")
 
     test_pruned_edges = []
-    for s, t in sample_gt_graph.graph.iter_edges():
-        sv = sample_gt_graph.graph.vp.id[s]
-        tv = sample_gt_graph.graph.vp.id[t]
+    for s, t in sample_gt_graph.ref_graph.iter_edges():
+        sv = sample_gt_graph.ref_graph.vp.id[s]
+        tv = sample_gt_graph.ref_graph.vp.id[t]
         test_pruned_edges.append((sv, tv))
 
     try:
@@ -58,10 +58,11 @@ def test_nx_prune(type_isolate):
     original_comp_memberships_dict = dict(zip(orig_nodes, orig_comps))
 
     sample_nx_graph.prune("6925_1_57")
-    num_pruned_nodes =  sample_nx_graph.graph.number_of_nodes()
-    print(f"\nsample_nx_graph now pruned, contains {num_pruned_nodes} nodes.\n")
+    num_pruned_nodes = sample_nx_graph.ref_graph.number_of_nodes()
+    num_pruned_edges = sample_nx_graph.ref_graph.number_of_edges()
+    print(f"\nsample_nx_graph now pruned, contains {num_pruned_nodes} nodes, {num_pruned_edges} edges.\n")
 
-    pruned_comp_memberships = list(sample_nx_graph.graph.nodes(data="comp_membership"))
+    pruned_comp_memberships = list(sample_nx_graph.ref_graph.nodes(data="comp_membership"))
     pruned_nodes, pruned_comps = zip(*pruned_comp_memberships)
     pruned_comp_memberships_dict = dict(zip(pruned_nodes, pruned_comps))
 
@@ -72,7 +73,7 @@ def test_nx_prune(type_isolate):
         assert type_idx in sample_nx_graph.graph
         print("Type isolate included in pruned graph.")
 
-        for v in sample_nx_graph.graph.nodes():
+        for v in sample_nx_graph.ref_graph.nodes():
             assert original_comp_memberships_dict[v] == pruned_comp_memberships_dict[v]
         print("Component memberships preserved after pruning.")
 

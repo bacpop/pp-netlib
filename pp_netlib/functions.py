@@ -1,14 +1,13 @@
 ########################
 ####   .CONSTRUCT   ####
 ########################
-from ast import Index
 from collections import defaultdict, Counter
 from functools import partial
-from multiprocessing import Pool, freeze_support
 import sys
 import scipy
 import numpy as np
 import pandas as pd
+import os
 
 def construct_with_graphtool(network_data, vertex_labels, weights = None):
     """Construct a graph with graph-tool
@@ -196,3 +195,21 @@ def summarise(graph, backend):
     scores = [base_score, base_score * (1 - metrics[3]), base_score * (1 - metrics[4])]
     
     return metrics, scores
+
+########################
+####      .SAVE     ####
+########################
+def save_graph(graph, backend, outdir, file_name, file_format):
+    if backend == "GT":
+        import graph_tool.all as gt
+        if file_format is None:
+            graph.save(os.path.join(outdir, file_name+".gt"))
+        elif file_format is not None:
+            if file_format not in [".gt", ".graphml"]:
+                raise NotImplementedError("Supported file formats to save a graph-tools graph are .gt or .graphml")
+            else:
+                graph.save(os.path.join(outdir, file_name+file_format))
+
+    if backend == "NX":
+        import networkx as nx
+        nx.write_graphml(graph, os.path.join(outdir, file_name+".graphml"))

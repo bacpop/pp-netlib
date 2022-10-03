@@ -1,6 +1,15 @@
 import networkx as nx
 
 def nx_get_clique_refs(graph, references):
+    """Get reference sample from each clique
+
+    Args:
+        graph (nx.Graph): networkx graph to be pruned
+        references (set): set of known reference samples, if available.
+
+    Returns:
+        references (set): set of reference samples from each clique
+    """
     cliques = list(nx.find_cliques(graph))
     # order list by size of clique
     cliques.sort(key = len, reverse=True)
@@ -17,6 +26,15 @@ def nx_get_clique_refs(graph, references):
     return references
 
 def nx_get_connected_refs(graph, references):
+    """Add nodes connecting references found from each clique
+
+    Args:
+        graph (nx.Graph): graph to be pruned
+        references (set): set of reference samples
+
+    Returns:
+        references: *updated* set, now containing connecting nodes
+    """
 
     new_clusters = sorted(nx.connected_components(graph), key=len, reverse=True)
     clustering = {}
@@ -39,7 +57,6 @@ def nx_get_connected_refs(graph, references):
         ref_G.remove_nodes_from([node for node in graph.nodes() if node not in references])
 
         for multi_ref_cluster in multi_ref_clusters:
-            # print(f"multi_ref_clustr = {multi_ref_cluster}")
             # Get a list of nodes that need to be in the same component
             check = []
             for reference in references:
@@ -53,20 +70,24 @@ def nx_get_connected_refs(graph, references):
                     # Add intermediate nodes
                     if check[j] not in component:
                         new_path = nx.shortest_path(graph, check[i], check[j])
-                        # print(f"new_path = {new_path}")
                         for node in new_path:
                             references.add(node)
 
-    # print(f"references = {references}")
     return references
 
-def alt_nx_get_clique_refs(graph, references):
+def nx_get_refs(graph):
+    """Wraps around nx_get_clique_refs, applies it to individual components in the input graph
+
+    Args:
+        graph (nx.Graph): graph to be pruned
+
+    Returns:
+        refs (set): set of reference samples from the graph
+    """
     nested_list = []
     for component in nx.connected_components(graph):
-        # print(f"component = {component}")
         subgraph = graph.subgraph(component)
-        subgraph_refs = nx_get_clique_refs(subgraph, references)
-        # print(subgraph_refs)
+        subgraph_refs = nx_get_clique_refs(subgraph, set())
         nested_list.append(subgraph_refs)
 
     refs = set([entry for sublist in nested_list for entry in sublist])
