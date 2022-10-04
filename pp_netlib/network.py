@@ -373,12 +373,9 @@ class Network:
 
         save_graph(graph=self.graph, backend=self.backend, outdir = self.outdir, file_name=file_name, file_format=file_format)
         
-        if to_save == "full_graph":
+        if to_save == "full_graph" or to_save == "both":
             save_graph(graph=self.graph, backend=self.backend, outdir = self.outdir, file_name=file_name, file_format=file_format)
-        elif to_save == "ref_graph":
-            save_graph(graph=self.ref_graph, backend=self.backend, outdir = self.outdir, file_name=file_name+".pruned", file_format=file_format)
-        elif to_save == "both":
-            save_graph(graph=self.graph, backend=self.backend, outdir = self.outdir, file_name=file_name, file_format=file_format)
+        if to_save == "ref_graph" or to_save == "both":
             save_graph(graph=self.ref_graph, backend=self.backend, outdir = self.outdir, file_name=file_name+".pruned", file_format=file_format)
 
         # useful with cugraph, to be added in later
