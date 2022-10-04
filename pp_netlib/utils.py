@@ -46,6 +46,41 @@ def get_args():
     args = parser.parse_args()
     return args
 
+def print_external_clusters(newClusters, extClusterFile, outPrefix,
+                          oldNames, printRef = True):
+    # Object to store output csv datatable
+    data_table = defaultdict(list)
+
+    # Read in external clusters
+    extClusters = read_isolate_type_from_csv(extClusterFile, mode = "external", return_dict = True)
+
+    # Go through each cluster (as defined by poppunk) and find the external
+    # clusters that had previously been assigned to any sample in the cluster
+    for ppCluster in newClusters:
+        # Store clusters as a set to avoid duplicates
+        prevClusters = defaultdict(set)
+        for sample in ppCluster:
+            for extCluster in extClusters:
+                if sample in extClusters[extCluster]:
+                    prevClusters[extCluster].add(extClusters[extCluster][sample])
+
+        # Go back through and print the samples that were found
+        for sample in ppCluster:
+            if printRef or sample not in oldNames:
+                data_table["sample"].append(sample)
+                for extCluster in extClusters:
+                    if extCluster in prevClusters:
+                        data_table[extCluster].append(";".join(prevClusters[extCluster]))
+                    else:
+                        data_table[extCluster].append("NA")
+
+    if "sample" not in data_table:
+        sys.stderr.write("WARNING: No new samples found, cannot write external clusters\n")
+    else:
+        pd.DataFrame(data=data_table).to_csv(outPrefix + "_external_clusters.csv",
+                                    columns = ["sample"] + list(extClusters.keys()),
+                                    index = False)
+
 def read_isolate_type_from_csv(clusters_csv, mode = "clusters", return_dict = False):
     """Read cluster definitions from CSV file.
     Args:
@@ -578,35 +613,35 @@ def setGtThreads(threads):
 #    UNUSED Fns  #
 #                #
 ##################
-def check_and_set_gpu(use_gpu, gpu_lib, quit_on_fail = False):
-    """Check GPU libraries can be loaded and set managed memory.
-    Args:
-        use_gpu (bool)
-            Whether GPU packages have been requested
-        gpu_lib (bool)
-            Whether GPU packages are available
-    Returns:
-        use_gpu (bool)
-            Whether GPU packages can be used
-    """
-    # load CUDA libraries
-    if use_gpu and not gpu_lib:
-        if quit_on_fail:
-            sys.stderr.write("Unable to load GPU libraries; exiting\n")
-            sys.exit(1)
-        else:
-            sys.stderr.write("Unable to load GPU libraries; using CPU libraries "
-            "instead\n")
-            use_gpu = False
+# def check_and_set_gpu(use_gpu, gpu_lib, quit_on_fail = False):
+#     """Check GPU libraries can be loaded and set managed memory.
+#     Args:
+#         use_gpu (bool)
+#             Whether GPU packages have been requested
+#         gpu_lib (bool)
+#             Whether GPU packages are available
+#     Returns:
+#         use_gpu (bool)
+#             Whether GPU packages can be used
+#     """
+#     # load CUDA libraries
+#     if use_gpu and not gpu_lib:
+#         if quit_on_fail:
+#             sys.stderr.write("Unable to load GPU libraries; exiting\n")
+#             sys.exit(1)
+#         else:
+#             sys.stderr.write("Unable to load GPU libraries; using CPU libraries "
+#             "instead\n")
+#             use_gpu = False
 
-    # Set memory management for large networks
-    if use_gpu:
-        rmm.reinitialize(managed_memory=True)
-        cudf.set_allocator("managed")
-        if "cupy" in sys.modules:
-            cupy.cuda.set_allocator(rmm.rmm_cupy_allocator)
-        if "cuda" in sys.modules:
-            cuda.set_memory_manager(rmm.RMMNumbaManager)
-        assert(rmm.is_initialized())
+#     # Set memory management for large networks
+#     if use_gpu:
+#         rmm.reinitialize(managed_memory=True)
+#         cudf.set_allocator("managed")
+#         if "cupy" in sys.modules:
+#             cupy.cuda.set_allocator(rmm.rmm_cupy_allocator)
+#         if "cuda" in sys.modules:
+#             cuda.set_memory_manager(rmm.RMMNumbaManager)
+#         assert(rmm.is_initialized())
 
-    return use_gpu
+#     return use_gpu

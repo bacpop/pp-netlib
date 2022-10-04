@@ -4,6 +4,7 @@
 import scipy
 import numpy as np
 import pandas as pd
+import os
 
 def construct_with_graphtool(network_data, vertex_labels, weights = None):
     """Construct a graph with graph-tool
@@ -137,12 +138,11 @@ def summarise(graph, backend):
 
     Args:
         graph (Network object): The graph for which to obtain summary metrics
-        backend (str): The tool used to build graph ("GT", "NX", or "CG"(TODO))
+        backend (str): The tool used to build graph ("GT", "NX", or "CU"(TODO))
 
     Returns:
         summary_contents (formatted str): Graph summary metrics formatted to print to stderr
     """
-
     if backend == "GT":
         import graph_tool.all as gt
         component_assignments, component_frequencies = gt.label_components(graph)
@@ -193,3 +193,20 @@ def summarise(graph, backend):
     
     return metrics, scores
 
+########################
+####      .SAVE     ####
+########################
+def save_graph(graph, backend, outdir, file_name, file_format):
+    if backend == "GT":
+        import graph_tool.all as gt
+        if file_format is None:
+            graph.save(os.path.join(outdir, file_name+".gt"))
+        elif file_format is not None:
+            if file_format not in [".gt", ".graphml"]:
+                raise NotImplementedError("Supported file formats to save a graph-tools graph are .gt or .graphml")
+            else:
+                graph.save(os.path.join(outdir, file_name+file_format))
+
+    if backend == "NX":
+        import networkx as nx
+        nx.write_graphml(graph, os.path.join(outdir, file_name+".graphml"))
