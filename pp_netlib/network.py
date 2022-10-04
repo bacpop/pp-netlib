@@ -1,9 +1,7 @@
 from functools import partial
 from multiprocessing import Pool
 import os, sys
-import numpy as np
-import pandas as pd
-import scipy
+
 
 from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, summarise
 
@@ -148,7 +146,13 @@ class Network:
         elif self.backend == "NX":
             self.graph = construct_with_networkx(network_data=network_data, vertex_labels=self.vertex_labels, weights=weights)
 
-    def prune(self, type_isolate = None):
+    def prune(self, type_isolate = None, threads = 4):
+        """Method to prune full graph and produce a reference graph
+
+        Args:
+            type_isolate (str, optional): Sample name of type isolate, as calcualted by poppunk. Defaults to None.
+            threads (int, optional): Number of threads to use when pruuning. Defaults to 4.
+        """
 
         if self.graph is None:
             raise RuntimeError("Graph not constructed or loaded.")
@@ -160,9 +164,10 @@ class Network:
             reference_vertices = set()
             components = self.gt.label_components(self.graph)[0].a
 
-            for component in set(components):
-                reference_indices = gt_clique_prune(component, self.graph, set(), components)
-                reference_vertices.update(reference_indices)
+            with Pool(threads) as pool:
+                ref_lists = pool.map(partial(gt_clique_prune, graph=self.graph, reference_indices=set(), components_list=components), set(components))
+
+            reference_vertices = set([entry for sublist in ref_lists for entry in sublist])
 
             labels = list(self.graph.vp["id"][v] for v in self.graph.vertices())
             self.ref_graph = gt_get_ref_graph(self.graph, reference_vertices, labels, type_isolate)
@@ -172,9 +177,15 @@ class Network:
 
         if self.backend == "NX":
 
-            from pp_netlib.nx_prune import nx_get_refs, nx_get_connected_refs
+            from pp_netlib.nx_prune import nx_get_clique_refs, nx_get_connected_refs
 
-            reference_vertices = nx_get_refs(self.graph)
+            #reference_vertices = nx_get_refs(self.graph)
+
+            subgraphs = [self.graph.subgraph(c) for c in self.nx.connected_components(self.graph)]
+            with Pool(threads) as pool:
+                ref_lists = pool.map(partial(nx_get_clique_refs, references=set()), subgraphs)
+            reference_vertices = set([entry for sublist in ref_lists for entry in sublist])
+
             updated_refs = nx_get_connected_refs(self.graph, reference_vertices)
 
             type_idx = [i[0] for i in list(self.graph.nodes(data="id")) if i[1] == type_isolate]

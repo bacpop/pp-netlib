@@ -1,6 +1,5 @@
 import sys
 import operator
-import numpy as np
 from scipy.stats import rankdata
 from pp_netlib.utils import gen_unword, read_isolate_type_from_csv, print_external_clusters
 import graph_tool.all as gt
