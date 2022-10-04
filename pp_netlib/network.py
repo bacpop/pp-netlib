@@ -3,7 +3,7 @@ from multiprocessing import Pool
 import os, sys
 
 
-from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, summarise
+from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, summarise, save_graph
 
 class Network:
     def __init__(self, ref_list, query_list = [], outdir = "./", backend = None, use_gpu = False):
@@ -178,8 +178,6 @@ class Network:
         if self.backend == "NX":
 
             from pp_netlib.nx_prune import nx_get_clique_refs, nx_get_connected_refs
-
-            #reference_vertices = nx_get_refs(self.graph)
 
             subgraphs = [self.graph.subgraph(c) for c in self.nx.connected_components(self.graph)]
             with Pool(threads) as pool:
@@ -366,8 +364,6 @@ class Network:
         Raises:
             NotImplementedError: If graph_tool is selected a backend,
         """
-        from pp_netlib.functions import save_graph
-
         if self.graph is None:
             raise RuntimeError("Graph not constructed or loaded.")
 

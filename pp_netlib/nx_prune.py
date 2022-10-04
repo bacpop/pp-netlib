@@ -74,22 +74,3 @@ def nx_get_connected_refs(graph, references):
                             references.add(node)
 
     return references
-
-def nx_get_refs(graph):
-    """Wraps around nx_get_clique_refs, applies it to individual components in the input graph
-
-    Args:
-        graph (nx.Graph): graph to be pruned
-
-    Returns:
-        refs (set): set of reference samples from the graph
-    """
-    nested_list = []
-    for component in nx.connected_components(graph):
-        subgraph = graph.subgraph(component)
-        subgraph_refs = nx_get_clique_refs(subgraph, set())
-        nested_list.append(subgraph_refs)
-
-    refs = set([entry for sublist in nested_list for entry in sublist])
-
-    return refs
