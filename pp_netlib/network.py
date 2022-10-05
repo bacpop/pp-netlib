@@ -199,6 +199,14 @@ class Network:
             num_nodes = self.ref_graph.number_of_nodes()
             num_edges = self.ref_graph.number_of_edges()
 
+        if self.backend == "CU":
+            from pp_netlib.cu_prune import extract_cu_refs
+
+            self.ref_graph = extract_cu_refs(self.graph, self.vertex_labels, type_isolate=type_isolate)
+
+            num_nodes = self.ref_graph.number_of_nodes()
+            num_edges = self.ref_graph.number_of_edges()
+
         sys.stderr.write(f"Pruned network has {num_nodes} nodes and {num_edges} edges.\n\n")
 
     def get_summary(self, print_to_std = True, summary_file_prefix = None):
