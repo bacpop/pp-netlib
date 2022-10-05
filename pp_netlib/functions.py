@@ -4,7 +4,7 @@
 import scipy
 import numpy as np
 import pandas as pd
-import os
+import os, sys
 
 def construct_with_graphtool(network_data, vertex_labels, weights = None):
     """Construct a graph with graph-tool
@@ -278,3 +278,6 @@ def save_graph(graph, backend, outdir, file_name, file_format):
     if backend == "NX":
         import networkx as nx
         nx.write_graphml(graph, os.path.join(outdir, file_name+".graphml"))
+
+    if backend == "CU":
+        graph.to_pandas_edgelist().to_csv(file_name + ".csv.gz", compression="gzip", index = False)

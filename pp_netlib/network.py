@@ -131,7 +131,6 @@ class Network:
         ########################
 
         # Check GPU library use
-        use_gpu = self.use_gpu
 
         # data structures
         if self.ref_list != self.query_list:
@@ -247,9 +246,7 @@ class Network:
                 summary.write(summary_contents)
             summary.close()
 
-    def visualize(self):
-        # code for calling viz functions
-        print("visualizing network")
+    def visualize(self, viz_type):
         return #files associated with viz
 
     def load_network(self, network_file):
@@ -365,7 +362,7 @@ class Network:
         print(f"converting from {intial_format} to {target_format}")
         return
 
-    def save(self, file_name, file_format, to_save=None):
+    def save(self, file_name, file_format, to_save="full"):
         """Save graph to file.
 
         Args:
@@ -394,7 +391,3 @@ class Network:
             save_graph(graph=self.graph, backend=self.backend, outdir = self.outdir, file_name=file_name, file_format=file_format)
         if to_save == "ref_graph" or to_save == "both":
             save_graph(graph=self.ref_graph, backend=self.backend, outdir = self.outdir, file_name=file_name+".pruned", file_format=file_format)
-
-        # useful with cugraph, to be added in later
-        # if self.backend == "CU":
-        #     self.graph.to_pandas_edgelist().to_csv(file_name + ".csv.gz", compression="gzip", index = False)
