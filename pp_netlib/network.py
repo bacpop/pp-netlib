@@ -3,7 +3,7 @@ from multiprocessing import Pool
 import os, sys
 
 
-from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, summarise, save_graph
+from pp_netlib.functions import construct_with_cugraph, construct_with_graphtool, construct_with_networkx, summarise, save_graph
 
 class Network:
     def __init__(self, ref_list, query_list = [], outdir = "./", backend = None, use_gpu = False):
@@ -60,10 +60,12 @@ class Network:
             import networkx as nx
             self.nx = nx
         elif self.backend == "CU":
-            raise NotImplementedError("GPU graph not yet implemented")
+            # raise NotImplementedError("GPU graph not yet implemented")
+            import cugraph
+            import cudf
+            self.cugraph = cugraph
+            self.cudf = cudf
             # import cupyx
-            # import cugraph
-            # import cudf
             # import cupy as cp
             # from numba import cuda
             # import rmm
@@ -145,6 +147,8 @@ class Network:
             self.graph = construct_with_graphtool(network_data=network_data, vertex_labels=self.vertex_labels, weights=weights)
         elif self.backend == "NX":
             self.graph = construct_with_networkx(network_data=network_data, vertex_labels=self.vertex_labels, weights=weights)
+        elif self.backend == "CU":
+            self.graph = construct_with_cugraph(network_data=network_data, vertex_labels=vertex_labels, weights=weights)
 
     def prune(self, type_isolate = None, threads = 4):
         """Method to prune full graph and produce a reference graph
@@ -273,23 +277,28 @@ class Network:
             sys.stderr.write(f"Loaded network with {num_nodes} nodes and {num_edges} edges with {self.backend}.\n\n")
 
         # useful for cugraph, to be added in later
-        # elif file_extension in [".csv", ".tsv", ".txt"]:
-        #     sys.stderr.write("The network file appears to be in tabular format, please load it as a dataframe and use the construct method to build a graph.\n")
-        #     sys.exit(1)
-        
-        # graph_df = cudf.read_csv(network_file, compression = "gzip")
-        # if "src" in graph_df.columns:
-        #     graph_df.rename(columns={"src": "source", "dst": "destination"}, inplace=True)
-        # genome_network = cugraph.Graph()
-        # if "weights" in graph_df.columns:
-        #     graph_df = graph_df[["source", "destination", "weights"]]
-        #     genome_network.from_cudf_edgelist(graph_df, edge_attr = "weights", renumber = False)
-        # else:
-        #     genome_network.from_cudf_edgelist(graph_df, renumber = False)
-        # sys.stderr.write("Network loaded: " + str(genome_network.number_of_vertices()) + " samples\n")
+        elif file_extension in [".csv", ".tsv", ".txt"]:
+            if self.backend in ["GT", "NX"]:
+                raise RuntimeError("The network file appears to be in tabular format, please load it as a dataframe and use the construct method to build a graph.\n")
+            elif self.backend == "CU":
+                graph_df = self.cudf.read_csv(network_file, compression = "gzip")
+                if "src" in graph_df.columns:
+                    graph_df.rename(columns={"src": "source", "dst": "destination"}, inplace=True)
+                self.graph = self.cugraph.Graph()
+                if "weights" in graph_df.columns:
+                    graph_df = graph_df[["source", "destination", "weights"]]
+                    self.graph.from_cudf_edgelist(graph_df, edge_attr = "weights", renumber = False)
+                else:
+                    self.graph.from_cudf_edgelist(graph_df, renumber = False)
+
+            num_nodes = self.graph.number_of_nodes()
+            num_edges = self.graph.number_of_edges()
+            sys.stderr.write(f"Loaded network with {num_nodes} nodes and {num_edges} edges with {self.backend}.\n\n")
 
         else:
             raise RuntimeError("File format not recognised.\n\n")
+
+        
 
     def add_to_network(self, new_data_df, new_vertex_labels):
 

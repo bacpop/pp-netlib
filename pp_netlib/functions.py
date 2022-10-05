@@ -130,9 +130,52 @@ def construct_with_networkx(network_data, vertex_labels, weights = None):
 
     return graph
 
+def construct_with_cugraph(network_data, vertex_labels, weights = None):
+    import cugraph
+    import cudf
+
+    graph = cugraph.Graph()
+    graph.add_nodes_from(vertex_labels)
+
+    if isinstance(network_data, cudf.DataFrame):
+        if weights is not None:
+            graph.from_cudf_edgelist(network_data, source="0", destination="1", edge_attr="2", renumber=False)
+        else:
+            graph.from_cudf_edgelist(network_data, source="0", destination="1", edge_attr=None)
+
+    if isinstance(network_data, pd.DataFrame):
+        if weights is not None:
+            graph.from_pandas_edgelist(network_data, source="0", destination="1", edge_attr="2", renumber=False)
+        else:
+            graph.from_pandas_edgelist(network_data, source="0", destination="1", edge_attr=None)
+
+    return graph
 ########################
 ####   .SUMMARISE   ####
 ########################
+def get_cugraph_triangles(graph):
+    """Counts the number of triangles in a cugraph
+    network. Can be removed when the cugraph issue
+    https://github.com/rapidsai/cugraph/issues/1043 is fixed.
+
+    ## DEPENDS ON Fns: {none}
+
+    Args:
+        graph (cugraph network)
+            Network to be analysed
+    Returns:
+        triangle_count (int)
+            Count of triangles in graph
+    """
+    import cupy as cp
+    num_vertices = graph.number_of_vertices()
+    edge_df = graph.view_edge_list()
+    A = cp.full((num_vertices, num_vertices), 0, dtype = cp.int32)
+    A[edge_df.src.values, edge_df.dst.values] = 1
+    A = cp.maximum( A, A.transpose() )
+    triangle_count = int(cp.around(cp.trace(cp.matmul(A, cp.matmul(A, A)))/6,0))
+    return triangle_count
+
 def summarise(graph, backend):
     """Get graph metrics and format into soutput string.
 
@@ -161,13 +204,6 @@ def summarise(graph, backend):
                 betweenness.append(max(gt.betweenness(subgraph, norm = True)[0].a))
                 sizes.append(size)
 
-        if len(betweenness) > 1:
-            mean_bt = np.mean(betweenness)
-            weighted_mean_bt = np.average(betweenness, weights=sizes)
-        elif len(betweenness) == 1:
-            mean_bt = betweenness[0]
-            weighted_mean_bt = betweenness[0]
-
     elif backend == "NX":
         import networkx as nx
         components = nx.number_connected_components(graph)
@@ -180,12 +216,44 @@ def summarise(graph, backend):
             betweenness.append(max((nx.betweenness_centrality(graph.subgraph(c))).values()))
             sizes.append(len(graph.subgraph(c)))
 
-        if len(betweenness) > 1:
-            mean_bt = np.mean(betweenness)
-            weighted_mean_bt = np.average(betweenness, weights=sizes)
-        elif len(betweenness) == 1:
-            mean_bt = betweenness[0]
-            weighted_mean_bt = betweenness[0]
+    elif backend == "CU":
+        import cugraph
+        component_assignments = cugraph.components.connectivity.connected_components(graph)
+        component_nums = component_assignments['labels'].unique().astype(int)
+        components = len(component_nums)
+        density = graph.number_of_edges()/(0.5 * graph.number_of_vertices() * graph.number_of_vertices() - 1)
+        # consistent with graph-tool for small graphs - triangle counts differ for large graphs
+        # could reflect issue https://github.com/rapidsai/cugraph/issues/1043
+        # this command can be restored once the above issue is fixed - scheduled for cugraph 0.20
+        # triangle_count = cugraph.community.triangle_count.triangles(G)/3
+        triangle_count = 3*get_cugraph_triangles(graph)
+        degree_df = graph.in_degree()
+        # consistent with graph-tool
+        triad_count = 0.5 * sum([d * (d - 1) for d in degree_df[degree_df['degree'] > 1]['degree'].to_pandas()])
+        if triad_count > 0:
+            transitivity = triangle_count/triad_count
+        else:
+            transitivity = 0.0
+
+        component_frequencies = component_assignments['labels'].value_counts(sort = True, ascending = False)
+        for component in component_nums.to_pandas():
+            size = component_frequencies[component_frequencies.index == component].iloc[0].astype(int)
+            if size > 3:
+                component_vertices = component_assignments['vertex'][component_assignments['labels']==component]
+                subgraph = cugraph.subgraph(graph, component_vertices)
+                if len(component_vertices) >= 100:
+                    component_betweenness = cugraph.betweenness_centrality(subgraph, k = 100, normalized = True)
+                else:
+                    component_betweenness = cugraph.betweenness_centrality(subgraph, normalized = True)
+                betweenness.append(component_betweenness['betweenness_centrality'].max())
+                sizes.append(size)
+
+    if len(betweenness) > 1:
+        mean_bt = np.mean(betweenness)
+        weighted_mean_bt = np.average(betweenness, weights=sizes)
+    elif len(betweenness) == 1:
+        mean_bt = betweenness[0]
+        weighted_mean_bt = betweenness[0]
 
     metrics = [components, density, transitivity, mean_bt, weighted_mean_bt]
     base_score = transitivity * (1 - density)
