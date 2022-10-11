@@ -7,7 +7,7 @@ from pp_netlib.network import Network
 sample_file = "tests/labelled_random.graphml"
 
 def test_gt_mst(sample_file):
-    sample_gt_graph = Network([], outdir="/Users/bruhad/Desktop/Code/pp-netlib/tests/", backend = "GT")
+    sample_gt_graph = Network([], outdir="tests/", backend = "GT")
     sample_gt_graph.load_network(sample_file)
 
     sample_gt_graph.visualize("mst", "test_gt")
@@ -32,7 +32,7 @@ def test_gt_mst(sample_file):
     return num_vertices, num_edges
 
 def test_nx_mst(sample_file):
-    sample_nx_graph = Network([], outdir="/Users/bruhad/Desktop/Code/pp-netlib/tests/", backend = "NX")
+    sample_nx_graph = Network([], outdir="tests/", backend = "NX")
     sample_nx_graph.load_network(sample_file)
     sample_nx_graph.visualize("mst", "test_nx")
     num_vertices = sample_nx_graph.mst_network.number_of_nodes()
