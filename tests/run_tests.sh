@@ -33,3 +33,6 @@ python tests/test_add.py
 
 ## test prune method
 python tests/test_prune.py
+
+## test visualization; currently mst only
+python tests/test_viz.py

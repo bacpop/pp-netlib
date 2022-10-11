@@ -3,7 +3,7 @@ from multiprocessing import Pool
 import os, sys
 
 
-from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, summarise, save_graph
+from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, draw_nx_mst, get_nx_clusters, summarise, save_graph
 
 class Network:
     def __init__(self, ref_list, query_list = [], outdir = "./", backend = None, use_gpu = False):
@@ -235,10 +235,48 @@ class Network:
                 summary.write(summary_contents)
             summary.close()
 
-    def visualize(self):
-        # code for calling viz functions
-        print("visualizing network")
-        return #files associated with viz
+    def visualize(self, viz_type, out_prefix):
+        from pp_netlib.functions import save_graph
+
+        unweighted_error_msg = RuntimeError("MST passed unweighted graph, weighted tree required.")
+
+        if self.backend == "GT":
+            if "weight" not in self.graph.edge_properties:
+                raise unweighted_error_msg
+            else:
+                from pp_netlib.functions import gt_generate_mst
+                self.mst_network = gt_generate_mst(self.graph)
+
+        elif self.backend == "NX":
+            if "weight" not in list(list(self.graph.edges(data=True))[0][-1].keys()): ## https://stackoverflow.com/questions/63610396/how-to-get-the-list-of-edge-attributes-of-a-networkx-graph
+                raise unweighted_error_msg
+            else:
+                from pp_netlib.functions import nx_generate_mst
+                self.mst_network = nx_generate_mst(self.graph) ##TODO
+
+        elif self.backend == "CU":
+            if not self.graph.is_weighted():
+                raise unweighted_error_msg
+            else:
+                from pp_netlib.functions import cu_generate_mst
+                self.mst_network = cu_generate_mst(self.graph)
+        
+        file_name = out_prefix+"_mst_network_data"
+        save_graph(self.mst_network, backend = self.backend, outdir = self.outdir, file_name = file_name, file_format = ".graphml")
+        
+        if viz_type == "mst":
+            if self.backend == "GT":
+                from pp_netlib.functions import draw_gt_mst, get_gt_clusters
+
+                isolate_clustering = get_gt_clusters(self.graph)
+                draw_gt_mst(mst = self.mst_network, out_prefix = os.path.join(self.outdir, out_prefix), isolate_clustering=isolate_clustering, overwrite=True)
+            
+            if self.backend == "NX":
+                isolate_clustering = get_nx_clusters(self.graph)
+                draw_nx_mst(mst=self.mst_network, out_prefix=os.path.join(self.outdir, out_prefix), isolate_clustering=isolate_clustering, overwrite=True)
+
+        if viz_type == "cytoscape":
+            pass
 
     def load_network(self, network_file):
         """Load a premade graph from a network file.
