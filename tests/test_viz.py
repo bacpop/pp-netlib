@@ -17,7 +17,7 @@ def test_gt_mst(sample_file):
 
     print(f"sample_gt_graph mst has {num_vertices} nodes and {num_edges} edges.\n")
 
-    expected_outfiles = ["tests/test_gt_mst_cluster_plot.png", "tests/test_gt_mst_network_data.graphml", "tests/test_gt_mst_stress_plot.png"]
+    expected_outfiles = ["tests/mst/test_gt_mst_cluster_plot.png", "tests/mst/test_gt_mst_network_data.graphml", "tests/mst/test_gt_mst_stress_plot.png"]
     for outfile in expected_outfiles:
         try:
             assert os.path.isfile(outfile)
@@ -40,7 +40,7 @@ def test_nx_mst(sample_file):
 
     print(f"sample_nx_graph mst has {num_vertices} nodes and {num_edges} edges.")
 
-    expected_outfiles = ["tests/test_nx_mst_cluster_plot.png", "tests/test_nx_mst_network_data.graphml", "tests/test_nx_mst_stress_plot.png"]
+    expected_outfiles = ["tests/mst/test_nx_mst_cluster_plot.png", "tests/mst/test_nx_mst_network_data.graphml", "tests/mst/test_nx_mst_stress_plot.png"]
     for outfile in expected_outfiles:
         try:
             assert os.path.isfile(outfile)

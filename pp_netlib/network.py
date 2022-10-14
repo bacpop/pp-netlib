@@ -245,6 +245,8 @@ class Network:
         if viz_type == "mst":
 
             mst_outdir = os.path.join(self.outdir, "mst")
+            if not os.path.exists(mst_outdir):
+                os.makedirs(mst_outdir)
             file_name = out_prefix+"_mst_network_data"
             save_graph(self.mst_network, backend = self.backend, outdir = mst_outdir, file_name = file_name, file_format = ".graphml")
 
@@ -252,17 +254,19 @@ class Network:
                 from pp_netlib.functions import draw_gt_mst, get_gt_clusters
 
                 isolate_clustering = get_gt_clusters(self.graph)
-                draw_gt_mst(mst = self.mst_network, out_prefix = os.path.join(self.outdir, out_prefix), isolate_clustering=isolate_clustering, overwrite=True)
+                draw_gt_mst(mst = self.mst_network, out_prefix = os.path.join(mst_outdir, out_prefix), isolate_clustering=isolate_clustering, overwrite=True)
             
             if self.backend == "NX":
                 from pp_netlib.functions import draw_nx_mst, get_nx_clusters
 
                 isolate_clustering = get_nx_clusters(self.graph)
-                draw_nx_mst(mst=self.mst_network, out_prefix=os.path.join(self.outdir, out_prefix), isolate_clustering=isolate_clustering, overwrite=True)
+                draw_nx_mst(mst=self.mst_network, out_prefix=os.path.join(mst_outdir, out_prefix), isolate_clustering=isolate_clustering, overwrite=True)
 
         if viz_type == "cytoscape":
 
             cytoscape_outdir = os.path.join(self.outdir, "cytoscape")
+            if not os.path.exists(cytoscape_outdir):
+                os.makedirs(cytoscape_outdir)
             save_graph(self.graph, self.backend, cytoscape_outdir, out_prefix+"_cytoscape", ",graphml")
             save_graph(self.mst_network, self.backend, cytoscape_outdir, out_prefix+"_mst", ".graphml")
 

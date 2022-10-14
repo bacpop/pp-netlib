@@ -613,30 +613,6 @@ def nx_save_graph_components(graph, out_prefix, outdir):
         save_graph(subgraph, "GT", outdir, out_prefix+"_component_"+str(idx + 1), ".graphml")
         del subgraph
 
-
-def write_cluster_csv(clustering, epi_data_file, suffix = '_Cluster'):
-    colnames = []
-    colnames = ['id']
-    for cluster_type in clustering:
-        col_name = cluster_type + suffix
-        colnames.append(col_name)
-
-    d = defaultdict(list)
-    if epi_data_file is not None:
-        columns_to_be_omitted = ['id', 'Id', 'ID', 'combined_Cluster__autocolour',
-        'core_Cluster__autocolour', 'accessory_Cluster__autocolour',
-        'overall_Lineage']
-        epiData = pd.read_csv(epi_data_file, index_col = False, quotechar='"')
-        epiData.index = (epiData.iloc[:,0]).split('/')[-1].replace('.','_').replace(':','').replace('(','_').replace(')','_')
-        for e in epiData.columns.values:
-            if e not in columns_to_be_omitted:
-                colnames.append(str(e))
-
-        # get example clustering name for validation
-        example_cluster_title = list(clustering.keys())[0]
-
-        ##TODO
-
 ########################
 ####   .METADATA    ####
 ########################
