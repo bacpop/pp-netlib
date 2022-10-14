@@ -1,9 +1,11 @@
 from functools import partial
 from multiprocessing import Pool
 import os, sys
+from platform import node
+import pandas as pd
 
 
-from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, draw_nx_mst, get_nx_clusters, summarise, save_graph
+from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, summarise, save_graph
 
 class Network:
     def __init__(self, ref_list, query_list = [], outdir = "./", backend = None, use_gpu = False):
@@ -235,36 +237,17 @@ class Network:
                 summary.write(summary_contents)
             summary.close()
 
-    def visualize(self, viz_type, out_prefix):
-        from pp_netlib.functions import save_graph
+    def visualize(self, viz_type, out_prefix, external_data = None):
+        from pp_netlib.functions import generate_mst_network, save_graph
 
-        unweighted_error_msg = RuntimeError("MST passed unweighted graph, weighted tree required.")
-
-        if self.backend == "GT":
-            if "weight" not in self.graph.edge_properties:
-                raise unweighted_error_msg
-            else:
-                from pp_netlib.functions import gt_generate_mst
-                self.mst_network = gt_generate_mst(self.graph)
-
-        elif self.backend == "NX":
-            if "weight" not in list(list(self.graph.edges(data=True))[0][-1].keys()): ## https://stackoverflow.com/questions/63610396/how-to-get-the-list-of-edge-attributes-of-a-networkx-graph
-                raise unweighted_error_msg
-            else:
-                from pp_netlib.functions import nx_generate_mst
-                self.mst_network = nx_generate_mst(self.graph) ##TODO
-
-        elif self.backend == "CU":
-            if not self.graph.is_weighted():
-                raise unweighted_error_msg
-            else:
-                from pp_netlib.functions import cu_generate_mst
-                self.mst_network = cu_generate_mst(self.graph)
-        
-        file_name = out_prefix+"_mst_network_data"
-        save_graph(self.mst_network, backend = self.backend, outdir = self.outdir, file_name = file_name, file_format = ".graphml")
+        self.mst_network = generate_mst_network(self.graph, self.backend)
         
         if viz_type == "mst":
+
+            mst_outdir = os.path.join(self.outdir, "mst")
+            file_name = out_prefix+"_mst_network_data"
+            save_graph(self.mst_network, backend = self.backend, outdir = mst_outdir, file_name = file_name, file_format = ".graphml")
+
             if self.backend == "GT":
                 from pp_netlib.functions import draw_gt_mst, get_gt_clusters
 
@@ -272,11 +255,29 @@ class Network:
                 draw_gt_mst(mst = self.mst_network, out_prefix = os.path.join(self.outdir, out_prefix), isolate_clustering=isolate_clustering, overwrite=True)
             
             if self.backend == "NX":
+                from pp_netlib.functions import draw_nx_mst, get_nx_clusters
+
                 isolate_clustering = get_nx_clusters(self.graph)
                 draw_nx_mst(mst=self.mst_network, out_prefix=os.path.join(self.outdir, out_prefix), isolate_clustering=isolate_clustering, overwrite=True)
 
         if viz_type == "cytoscape":
-            pass
+
+            cytoscape_outdir = os.path.join(self.outdir, "cytoscape")
+            save_graph(self.graph, self.backend, cytoscape_outdir, out_prefix+"_cytoscape", ",graphml")
+            save_graph(self.mst_network, self.backend, cytoscape_outdir, out_prefix+"_mst", ".graphml")
+
+            if self.backend == "GT":
+                from pp_netlib.functions import gt_save_graph_components, get_gt_clusters
+                gt_save_graph_components(self.graph, out_prefix, cytoscape_outdir)
+                clustering = get_gt_clusters(self.graph)
+
+            if self.backend == "NX":
+                from pp_netlib.functions import nx_save_graph_components, get_nx_clusters
+                nx_save_graph_components(self.graph, out_prefix, cytoscape_outdir)
+                clustering = get_nx_clusters(self.graph)
+
+            self.write_metadata(cytoscape_outdir, out_prefix, external_data)
+
 
     def load_network(self, network_file):
         """Load a premade graph from a network file.
@@ -370,20 +371,36 @@ class Network:
 
         self.vertex_labels += new_vertex_labels
 
-    def _convert(self, intial_format, target_format):
-        ### TODO call load_network, use network_to_edges, then call construct, add check to prevent computation in case of missing imports
+    def write_metadata(self, meta_outdir, out_prefix, external_data):
+        
+        if meta_outdir is None:
+            meta_outdir = self.outdir
 
-        # if intial_format == "cugraph":
-        #     cugraph_dataframe = cugraph.to_pandas_edgelist(self.graph)
+        if self.backend == "GT":
+            from pp_netlib.functions import gt_get_graph_data
+            self.edge_data, self.sample_metadata = gt_get_graph_data(self.graph)
 
-
-
-        # if target_format == "cugraph" and not self.use_gpu:
-        #     sys.stderr.write("You have asked for your graph to be converted to cugraph format, but your system/environment seems to be missing gpu related imports. Converting anyway...")
+        if self.backend == "NX":
+            from pp_netlib.functions import nx_get_graph_data
+            self.edge_data, self.sample_metadata = nx_get_graph_data(self.graph)
 
         
+        pd.DataFrame.from_dict(self.edge_data, orient="index", columns=["source", "target", "edge_weight"]).to_csv(os.path.join(meta_outdir, out_prefix), sep="\t", index=False)
 
-        print(f"converting from {intial_format} to {target_format}")
+        if external_data is None:
+            pd.DataFrame.from_dict(self.sample_metadata, orient="index", columns=["sample_id", "sample_component"]).to_csv(os.path.join(meta_outdir, out_prefix), sep="\t", index=False)
+
+        else:
+            node_data_df = pd.DataFrame.from_dict(self.sample_metadata, orient="index", columns=["sample_id", "sample_component"])
+            if isinstance(external_data, str):
+                external_data_df = pd.read_csv(external_data, sep="\t", header=0)
+                sample_metadata = pd.merge(node_data_df, external_data_df, on="sample_id")
+            elif isinstance(external_data, pd.DataFrame):
+                sample_metadata = pd.merge(node_data_df, external_data, on="sample_id")
+
+            sample_metadata.to_csv(os.path.join(meta_outdir, out_prefix), sep="\t", index=False)
+            
+
         return
 
     def save(self, file_name, file_format, to_save=None):

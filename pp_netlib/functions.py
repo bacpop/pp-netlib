@@ -1,6 +1,7 @@
 ########################
 ####   .CONSTRUCT   ####
 ########################
+from collections import defaultdict
 import scipy
 from scipy.stats import rankdata
 import numpy as np
@@ -197,6 +198,78 @@ def summarise(graph, backend):
 ########################
 ####      .SAVE     ####
 ########################
+def prepare_graph(graph, labels, backend):
+
+    def prep_gt(gt_graph, labels):
+        import graph_tool.all as gt
+        ## check that nodes have labels -- required
+        if "id" not in gt_graph.edge_properties:
+            ## if no list of labels is provided, improvise node ids such that for node "i", id=str(i+1)
+            if labels is None:
+                v_name_prop = gt_graph.new_vp("string")
+                gt_graph.vertex_properties["id"] = v_name_prop
+                for i in range(len([v for v in gt_graph.vertices()])):
+                    v_name_prop[gt_graph.vertex(i)] = "node"+str(i+1)
+
+            ## if a list of labels is provided, apply labels to nodes
+            elif labels is not None:
+                v_name_prop = gt_graph.new_vp("string")
+                gt_graph.vertex_properties["id"] = v_name_prop
+                for i in range(len([v for v in gt_graph.vertices()])):
+                    v_name_prop[gt_graph.vertex(i)] = labels[i]
+
+        ## check if comp_membership is assigned -- could make things easier?
+        if "comp_membership" not in gt_graph.edge_properties:
+            vprop = gt_graph.new_vp("int")
+            gt_graph.vp.comp_membership = vprop
+            gt.label_components(gt_graph, vprop="comp_membership")
+
+        ## check if edges have weights -- not required for most processes
+        if "weight" not in gt_graph.edge_properties:
+            print("Graph edges are not weighted.")
+
+        return gt_graph
+
+
+    def prep_nx(nx_graph, labels):
+        import networkx as nx
+        ## check that nodes have labels -- required
+        if "id" not in list(list(nx_graph.nodes(data=True))[0][-1].keys()):
+            ## if no list of labels is provided, improvise node ids such that for node "i", id=str(i+1)
+            if labels is None:
+                for idx, v in enumerate(nx_graph.nodes()):
+                    nx_graph.nodes[v]["id"] = "node_"+str(idx+1)
+
+            ## if a list of labels is provided, apply labels to nodes
+            elif labels is not None:
+                for i, v in enumerate(nx_graph.nodes()):
+                    nx_graph.nodes[v]["id"] = labels[i]
+
+        ## check if comp_membership is assigned -- could make things easier?
+        if "comp_membership" not in list(list(nx_graph.nodes(data=True))[0][-1].keys()):
+            for idx, c in enumerate(nx.connected_components(nx_graph.graph)):
+                for v in c:
+                    nx_graph.graph.nodes[v]["comp_membership"] = idx
+    
+        ## check if edges have weights -- not required for most processes
+        if "weight" not in list(list(nx_graph.edges(data=True))[0][-1].keys()):
+            print("Graph edges are not weighted.")
+
+        return nx_graph
+
+
+    if graph is None:
+        raise RuntimeError("Graph not constructed or loaded")
+
+    else:
+        if backend == "GT":
+            graph = prep_gt(graph, labels)
+        elif backend == "NX":
+            graph = prep_nx(graph, labels)
+
+    return graph
+
+
 def save_graph(graph, backend, outdir, file_name, file_format):
     if backend == "GT":
         import graph_tool.all as gt
@@ -373,6 +446,28 @@ def cu_generate_mst(graph):
 
     return mst_network
 
+def generate_mst_network(graph, backend):
+    unweighted_error_msg = RuntimeError("MST passed unweighted graph, weighted tree required.")
+
+    if backend == "GT":
+        if "weight" not in graph.edge_properties:
+            raise unweighted_error_msg
+        else:
+            mst_network = gt_generate_mst(graph)
+
+    elif backend == "NX":
+        if "weight" not in list(list(graph.edges(data=True))[0][-1].keys()): ## https://stackoverflow.com/questions/63610396/how-to-get-the-list-of-edge-attributes-of-a-networkx-graph
+            raise unweighted_error_msg
+        else:
+            mst_network = nx_generate_mst(graph) ##TODO
+
+    elif backend == "CU":
+        if not graph.is_weighted():
+            raise unweighted_error_msg
+        else:
+            mst_network = cu_generate_mst(graph)
+
+    return mst_network
 
 def get_gt_clusters(graph):
     import graph_tool.all as gt
@@ -494,3 +589,82 @@ def draw_nx_mst(mst, out_prefix, isolate_clustering, overwrite):
             # plt.show()
             plt.savefig(graph2_file_name)
             plt.close()
+
+def gt_save_graph_components(graph, out_prefix, outdir):
+    import graph_tool.all as gt
+
+    component_assignments, component_hist = gt.label_components(graph)
+    for component_idx in range(len(component_hist)):
+        remove_list = []
+        for vidx, v_component in enumerate(component_assignments.a):
+            if v_component != component_idx:
+                remove_list.append(vidx)
+        G_copy = graph.copy()
+        G_copy.remove_vertex(remove_list)
+
+        save_graph(G_copy, "GT", outdir, out_prefix+"_component_"+str(component_idx + 1), ".graphml")
+        del G_copy
+
+def nx_save_graph_components(graph, out_prefix, outdir):
+    import networkx as nx
+
+    for idx, c in enumerate(nx.connected_components(graph)):
+        subgraph = graph.subgraph(c)
+        save_graph(subgraph, "GT", outdir, out_prefix+"_component_"+str(idx + 1), ".graphml")
+        del subgraph
+
+
+def write_cluster_csv(clustering, epi_data_file, suffix = '_Cluster'):
+    colnames = []
+    colnames = ['id']
+    for cluster_type in clustering:
+        col_name = cluster_type + suffix
+        colnames.append(col_name)
+
+    d = defaultdict(list)
+    if epi_data_file is not None:
+        columns_to_be_omitted = ['id', 'Id', 'ID', 'combined_Cluster__autocolour',
+        'core_Cluster__autocolour', 'accessory_Cluster__autocolour',
+        'overall_Lineage']
+        epiData = pd.read_csv(epi_data_file, index_col = False, quotechar='"')
+        epiData.index = (epiData.iloc[:,0]).split('/')[-1].replace('.','_').replace(':','').replace('(','_').replace(')','_')
+        for e in epiData.columns.values:
+            if e not in columns_to_be_omitted:
+                colnames.append(str(e))
+
+        # get example clustering name for validation
+        example_cluster_title = list(clustering.keys())[0]
+
+        ##TODO
+
+########################
+####   .METADATA    ####
+########################
+def gt_get_graph_data(graph):
+    edge_data = defaultdict(list)
+    node_data = defaultdict(list)
+
+    for idx, e in enumerate(graph.iter_edges()):
+        source_node = graph.vp.id[e[0]]
+        target_node = graph.vp.id[e[1]]
+        edge_weight = graph.ep.weight[e]
+        edge_data[idx] = [source_node, target_node, edge_weight]
+
+    for idx, v in enumerate(graph.iter_vertices()):
+        node_id = graph.vp.id[v]
+        node_comp = graph.vp.comp_membership[v]
+        node_data[idx] = [node_id, node_comp]
+
+    return edge_data, node_data
+
+def nx_get_graph_data(graph):
+    edge_data = defaultdict(list)
+    node_data = defaultdict(list)
+
+    for idx, (s, t, w) in enumerate(graph.edges.data("weight")):
+        edge_data[idx] = [graph.nodes()[s]["id"], graph.nodes()[t]["id"], w]
+
+    for idx, (v, v_data) in enumerate(graph.nodes(data=True)):
+        node_data[idx] = [v_data["id"], v_data["comp_membership"]]
+    
+    return edge_data, node_data
