@@ -2,6 +2,7 @@
 ####   .CONSTRUCT   ####
 ########################
 from collections import defaultdict
+import subprocess
 import scipy
 from scipy.stats import rankdata
 import numpy as np
@@ -247,7 +248,7 @@ def prepare_graph(graph, labels, backend):
 
         ## check if comp_membership is assigned -- could make things easier?
         if "comp_membership" not in list(list(nx_graph.nodes(data=True))[0][-1].keys()):
-            for idx, c in enumerate(nx.connected_components(nx_graph.graph)):
+            for idx, c in enumerate(sorted(nx.connected_components(nx_graph.graph))):
                 for v in c:
                     nx_graph.graph.nodes[v]["comp_membership"] = idx
     
@@ -644,3 +645,59 @@ def nx_get_graph_data(graph):
         node_data[idx] = [v_data["id"], v_data["comp_membership"]]
     
     return edge_data, node_data
+
+def write_cytoscape_csv(outfile, node_names, node_labels, clustering, epi_csv = None, suffix = '_Cluster'):
+    colnames = []
+    colnames = ['id']
+    for cluster_type in clustering:
+        col_name = cluster_type + suffix
+        colnames.append(col_name)
+    
+    # process epidemiological data
+    d = defaultdict(list)
+
+    # process epidemiological data without duplicating names
+    # used by PopPUNK
+    if epi_csv is not None:
+        columns_to_be_omitted = ['id', 'Id', 'ID', 'combined_Cluster__autocolour',
+        'core_Cluster__autocolour', 'accessory_Cluster__autocolour',
+        'overall_Lineage']
+        epiData = pd.read_csv(epi_csv, index_col = False, quotechar='"')
+        epiData.index = [name.split('/')[-1].replace('.','_').replace(':','').replace('(','_').replace(')','_') for name in (epiData.iloc[:,0])]
+        for e in epiData.columns.values:
+            if e not in columns_to_be_omitted:
+                colnames.append(str(e))
+
+    # get example clustering name for validation
+    example_cluster_title = list(clustering.keys())[0]
+
+    for name, label in zip(node_names, [name.split('/')[-1].replace('.','_').replace(':','').replace('(','_').replace(')','_') for name in node_labels]):
+        d['id'].append(label)
+        for cluster_type in clustering:
+            col_name = cluster_type + suffix
+            d[col_name].append(clustering[cluster_type][name])
+
+    if epi_csv is not None:
+        if label in epiData.index:
+            for col, value in zip(epiData.columns.values, epiData.loc[label].values):
+                if col not in columns_to_be_omitted:
+                    d[col].append(str(value))
+
+    # print CSV
+    sys.stderr.write("Parsed data, now writing to CSV\n")
+    try:
+        pd.DataFrame(data=d).to_csv(outfile, columns = colnames, index = False)
+    except subprocess.CalledProcessError as e:
+        sys.stderr.write("Problem with epidemiological data CSV; returned code: " + str(e.returncode) + "\n")
+        # check CSV
+        prev_col_items = -1
+        prev_col_name = "unknown"
+        for col in d:
+            this_col_items = len(d[col])
+            if prev_col_items > -1 and prev_col_items != this_col_items:
+                sys.stderr.write("Discrepant length between " + prev_col_name + \
+                                 " (length of " + prev_col_items + ") and " + \
+                                 col + "(length of " + this_col_items + ")\n")
+        sys.exit(1)
+
+
