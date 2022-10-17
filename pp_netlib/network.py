@@ -5,7 +5,7 @@ from platform import node
 import pandas as pd
 
 
-from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, summarise, save_graph
+from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, summarise, save_graph, write_cytoscape_csv
 
 class Network:
     def __init__(self, ref_list, query_list = [], outdir = "./", backend = None, use_gpu = False):
@@ -263,7 +263,8 @@ class Network:
                 draw_nx_mst(mst=self.mst_network, out_prefix=os.path.join(mst_outdir, out_prefix), isolate_clustering=isolate_clustering, overwrite=True)
 
         if viz_type == "cytoscape":
-
+            from pp_netlib.functions import write_cytoscape_csv
+        
             cytoscape_outdir = os.path.join(self.outdir, "cytoscape")
             if not os.path.exists(cytoscape_outdir):
                 os.makedirs(cytoscape_outdir)
@@ -275,10 +276,16 @@ class Network:
                 gt_save_graph_components(self.graph, out_prefix, cytoscape_outdir)
                 clustering = get_gt_clusters(self.graph)
 
+                write_cytoscape_csv(os.path.join(cytoscape_outdir, out_prefix+".csv"), clustering.keys(), clustering, external_data)
+
             if self.backend == "NX":
                 from pp_netlib.functions import nx_save_graph_components, get_nx_clusters
                 nx_save_graph_components(self.graph, out_prefix, cytoscape_outdir)
                 clustering = get_nx_clusters(self.graph)
+
+                write_cytoscape_csv(os.path.join(cytoscape_outdir, out_prefix+".csv"), clustering.keys(), clustering, external_data)
+
+            
 
             self.write_metadata(cytoscape_outdir, out_prefix, external_data)
 

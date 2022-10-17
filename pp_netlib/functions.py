@@ -646,7 +646,7 @@ def nx_get_graph_data(graph):
     
     return edge_data, node_data
 
-def write_cytoscape_csv(outfile, node_names, node_labels, clustering, epi_csv = None, suffix = '_Cluster'):
+def write_cytoscape_csv(outfile, node_names, clustering, epi_csv = None, suffix = '_Cluster'):
     colnames = []
     colnames = ['id']
     for cluster_type in clustering:
@@ -671,15 +671,15 @@ def write_cytoscape_csv(outfile, node_names, node_labels, clustering, epi_csv = 
     # get example clustering name for validation
     example_cluster_title = list(clustering.keys())[0]
 
-    for name, label in zip(node_names, [name.split('/')[-1].replace('.','_').replace(':','').replace('(','_').replace(')','_') for name in node_labels]):
-        d['id'].append(label)
+    for name in node_names:
+        d['id'].append(name)
         for cluster_type in clustering:
             col_name = cluster_type + suffix
             d[col_name].append(clustering[cluster_type][name])
 
     if epi_csv is not None:
-        if label in epiData.index:
-            for col, value in zip(epiData.columns.values, epiData.loc[label].values):
+        if name in epiData.index:
+            for col, value in zip(epiData.columns.values, epiData.loc[name].values):
                 if col not in columns_to_be_omitted:
                     d[col].append(str(value))
 
