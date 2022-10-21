@@ -27,7 +27,7 @@ def test_gt_mst(sample_file):
 
     for outfile in expected_outfiles:
         os.remove(outfile) 
-    os.rmdir("/Users/bruhad/Desktop/Code/pp-netlib/tests/mst")
+    os.rmdir("./tests/mst")
     print("Cleanup after GT mst done.\n")
 
     return num_vertices, num_edges
@@ -51,7 +51,7 @@ def test_nx_mst(sample_file):
 
     for outfile in expected_outfiles:
         os.remove(outfile) 
-    os.rmdir("/Users/bruhad/Desktop/Code/pp-netlib/tests/mst")
+    os.rmdir("./tests/mst")
     print("Cleanup after NX mst done.\n")
 
     return num_vertices, num_edges
