@@ -77,7 +77,7 @@ def test_gt_cytoscape(sample_file):
     for outfile in expected_outfiles:
         os.remove(outfile)
 
-    os.rmdir("/Users/bruhad/Desktop/Code/pp-netlib/tests/cytoscape")
+    os.rmdir("./tests/cytoscape")
     print("Cleanup after GT cytoscape test done.\n")
 
 def test_nx_cytoscape(sample_file):
@@ -101,7 +101,7 @@ def test_nx_cytoscape(sample_file):
     for outfile in expected_outfiles:
         os.remove(outfile)
 
-    os.rmdir("/Users/bruhad/Desktop/Code/pp-netlib/tests/cytoscape")
+    os.rmdir("./tests/cytoscape")
     print("Cleanup after NX cytoscape test done.\n")
 
 if __name__ == "__main__":
