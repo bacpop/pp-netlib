@@ -199,6 +199,7 @@ def summarise(graph, backend):
 ########################
 ####      .SAVE     ####
 ########################
+#TODO
 def prepare_graph(graph, labels, backend):
 
     def prep_gt(gt_graph, labels):
@@ -611,12 +612,13 @@ def nx_save_graph_components(graph, out_prefix, outdir):
 
     for idx, c in enumerate(nx.connected_components(graph)):
         subgraph = graph.subgraph(c)
-        save_graph(subgraph, "GT", outdir, out_prefix+"_component_"+str(idx + 1), ".graphml")
+        save_graph(subgraph, "NX", outdir, out_prefix+"_component_"+str(idx + 1), ".graphml")
         del subgraph
 
 ########################
 ####   .METADATA    ####
 ########################
+#TODO
 def gt_get_graph_data(graph):
     edge_data = defaultdict(list)
     node_data = defaultdict(list)
@@ -675,7 +677,7 @@ def write_cytoscape_csv(outfile, node_names, clustering, epi_csv = None, suffix 
         d['id'].append(name)
         for cluster_type in clustering:
             col_name = cluster_type + suffix
-            d[col_name].append(clustering[cluster_type][name])
+            d[col_name].append(clustering[name])
 
     if epi_csv is not None:
         if name in epiData.index:

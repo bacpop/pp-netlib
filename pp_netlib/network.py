@@ -1,11 +1,10 @@
 from functools import partial
 from multiprocessing import Pool
 import os, sys
-from platform import node
 import pandas as pd
 
 
-from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, summarise, save_graph, write_cytoscape_csv
+from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, summarise, save_graph
 
 class Network:
     def __init__(self, ref_list, query_list = [], outdir = "./", backend = None, use_gpu = False):
@@ -268,7 +267,7 @@ class Network:
             cytoscape_outdir = os.path.join(self.outdir, "cytoscape")
             if not os.path.exists(cytoscape_outdir):
                 os.makedirs(cytoscape_outdir)
-            save_graph(self.graph, self.backend, cytoscape_outdir, out_prefix+"_cytoscape", ",graphml")
+            save_graph(self.graph, self.backend, cytoscape_outdir, out_prefix+"_cytoscape", ".graphml")
             save_graph(self.mst_network, self.backend, cytoscape_outdir, out_prefix+"_mst", ".graphml")
 
             if self.backend == "GT":
@@ -286,8 +285,8 @@ class Network:
                 write_cytoscape_csv(os.path.join(cytoscape_outdir, out_prefix+".csv"), clustering.keys(), clustering, external_data)
 
             
-
-            self.write_metadata(cytoscape_outdir, out_prefix, external_data)
+            # in progress
+            # self.write_metadata(cytoscape_outdir, out_prefix, external_data)
 
 
     def load_network(self, network_file):
