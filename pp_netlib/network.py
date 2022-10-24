@@ -7,16 +7,13 @@ import pandas as pd
 from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, summarise, save_graph
 
 class Network:
-    def __init__(self, ref_list, query_list = [], outdir = "./", backend = None, use_gpu = False):
-        """Initialises a graph object (based on graph-tool, networkx (TODO), or cugraph (TODO)). Produces a Network object.
+    def __init__(self, ref_list, outdir = "./", backend = None):
+        """Initialises a graph object (based on graph-tool, networkx, or cugraph (TODO)). Produces a Network object.
 
         Args:
             ref_list (list): List of sequence names/identifiers (names/identifiers should be strings) which will be vertices in the graph
-            query_list (list): List of sequence names/identifiers (names/identifiers) (TODO not used/necessary?)
             outdir (str): Path to output directory where graph files will be stored. Defaults to "./" (i.e. working directory)
             backend (str, optional): Which graphing module to use. Can be specified here (valid options: "GT", "NX", "CU") or as an environment variable.
-            use_gpu (bool, optional): Whether to use GPU and GPU python modules. Defaults to False.
-                                      If set to True and if ImportErrors are raised due to missing moduiles, will revert to False.
 
         Usage:
         your_script.py or interactive python terminal
@@ -43,17 +40,41 @@ class Network:
             export GRAPH_BACKEND=GT ## inside bash/shell terminal/environment
             ```
         """
-        self.ref_list = ref_list
-        self.query_list = query_list
-        self.outdir = outdir
+        ## initialising class attributes
+        self.outdir = outdir # directory to which all outputs are written
+
+        self.ref_list = ref_list # list of sample names
+        self.graph = None # empty graph
+        self.ref_graph = None # empty pruned graph
+        
+        ## if backend not provided when Network is initialised, try to read backend from env
+        ## if backend is provided during init AND set as env var, value provided during init will be used.
         if backend is None:
             self.backend = os.getenv("GRAPH_BACKEND") ## read os env variable "GRAPH_BACKEND"
         else:
             self.backend = backend ## else use backend if specified
-        self.use_gpu = use_gpu
-        self.graph = None
-        self.ref_graph = None
 
+        ## if no backend provided in either way, try to import graphtool first, then networkx, and quit if neither found (TODO: is this a good idea?)
+        if backend is None and os.getenv("GRAPH_BACKEND") is None:
+            print("No graph module specified, checking for available modules...")
+            try:
+                import graph_tool.all as gt
+                self.gt = gt
+                print("Using graph-tool...")
+                self.backend = "GT"
+            except ImportError:
+                print("Graph-tool not found...")
+
+                try:
+                    import networkx as nx
+                    self.nx = nx
+                    print("Using networkx...")
+                    self.backend = "NX"
+                except ImportError as ie:
+                    print("Networkx not found...\nQuitting.\n")
+                    raise ie
+
+        ## perform imports
         if self.backend == "GT":
             import graph_tool.all as gt
             self.gt = gt
@@ -70,7 +91,7 @@ class Network:
             # import rmm
             # use_gpu = True
 
-    def construct(self, network_data, weights = None): #, previous_network = None, adding_qq_dists = False, old_ids = None, previous_pkl = None):
+    def construct(self, network_data, weights = None):
         """Method called on Network object. Constructs a graph using either graph-tool, networkx, or cugraph(TODO)
 
         Args:
@@ -129,19 +150,12 @@ class Network:
         ####     INITIAL    ####
         ########################
 
-        # Check GPU library use
-        use_gpu = self.use_gpu
-
-        # data structures
-        if self.ref_list != self.query_list:
-            vertex_labels = self.ref_list + self.query_list
-            self_comparison = False
-        else:
-            vertex_labels = self.ref_list
-            self_comparison = True
+        ## clean up problem characters in sample names, store as vertex_labels attribute
+        vertex_labels = [sample.replace('.','_').replace(':','').replace('(','_').replace(')','_') for sample in self.ref_list]
         self.vertex_labels = vertex_labels
         self.weights = weights
-        # initialise a graph object
+
+        ## initialise a graph object
         if self.backend == "GT":
             self.graph = construct_with_graphtool(network_data=network_data, vertex_labels=self.vertex_labels, weights=weights)
         elif self.backend == "NX":
@@ -159,17 +173,21 @@ class Network:
             raise RuntimeError("Graph not constructed or loaded.")
 
         if self.backend == "GT":
-
+            ## get pruning fns
             from pp_netlib.gt_prune import gt_clique_prune, gt_get_ref_graph
 
+            ## set up iterables
             reference_vertices = set()
             components = self.gt.label_components(self.graph)[0].a
 
+            ## run prune in parallel
             with Pool(threads) as pool:
                 ref_lists = pool.map(partial(gt_clique_prune, graph=self.graph, reference_indices=set(), components_list=components), set(components))
 
+            ## flatten prune results
             reference_vertices = set([entry for sublist in ref_lists for entry in sublist])
 
+            ## create pruned ref graph
             labels = list(self.graph.vp["id"][v] for v in self.graph.vertices())
             self.ref_graph = gt_get_ref_graph(self.graph, reference_vertices, labels, type_isolate)
 
@@ -177,21 +195,29 @@ class Network:
             num_edges = self.ref_graph.num_edges()
 
         if self.backend == "NX":
-
+            ## get pruning fns
             from pp_netlib.nx_prune import nx_get_clique_refs, nx_get_connected_refs
 
+            ## set up iterable over subgraphs
             subgraphs = [self.graph.subgraph(c) for c in self.nx.connected_components(self.graph)]
+
+            ## run prune in parallel
             with Pool(threads) as pool:
                 ref_lists = pool.map(partial(nx_get_clique_refs, references=set()), subgraphs)
+
+            ## flatten prune results
             reference_vertices = set([entry for sublist in ref_lists for entry in sublist])
 
+            ## get shortest paths between prune results so that component assignments match the original
             updated_refs = nx_get_connected_refs(self.graph, reference_vertices)
 
+            ## add type_isolate to pruned list of samples
             type_idx = [i[0] for i in list(self.graph.nodes(data="id")) if i[1] == type_isolate]
             updated_refs.add(type_idx[0])
+
+            ## create pruned ref graph
             self.ref_graph = self.graph.copy()
             self.ref_graph.remove_nodes_from([node for node in self.graph.nodes() if node not in updated_refs])
-            
 
             num_nodes = self.ref_graph.number_of_nodes()
             num_edges = self.ref_graph.number_of_edges()
@@ -208,10 +234,11 @@ class Network:
         Raises:
             RuntimeError: RuntimeError raised if no graph initialised.
         """
-        # print some summaries
+        
         if self.graph is None:
             raise RuntimeError("Graph not constructed or loaded.")
 
+        ## store metrics and stores as attributes
         self.metrics, self.scores = summarise(self.graph, self.backend)
 
         summary_contents = ("Network summary:\n" + "\n".join(["\tComponents\t\t\t\t" + str(self.metrics[0]),
@@ -223,12 +250,12 @@ class Network:
                                                     "\tScore (w/ betweenness)\t\t\t" + "{:.4f}".format(self.scores[1]),
                                                     "\tScore (w/ weighted-betweenness)\t\t" + "{:.4f}".format(self.scores[2])])
                                                     + "\n")
+
+        ## print some summaries
         if print_to_std:
             sys.stderr.write(f"{summary_contents}\n\n")
 
-        #################################
-        #  write summary to plain text  #
-        #################################
+        ##  write summary to plain text
         if summary_file_prefix is not None:
             summary_file_name = os.path.join(self.outdir, (str(summary_file_prefix) + ".txt"))
 
@@ -237,18 +264,29 @@ class Network:
             summary.close()
 
     def visualize(self, viz_type, out_prefix, external_data = None):
+        """Generate visualisations from graph.
+
+        Args:
+            viz_type (str): can be either "mst" or "cytoscape". If "mst", minimum-spanning tree visualisations are produced as .png files, mst saved as .graphml. 
+                    If "cytoscape", the graph, individual components, and minimum spanning tree are saved as .graphml and a csv file containing cluster info is also produced.
+            out_prefix (str): the prefix to apply to all output files
+            external_data (path/str *OR* pd.DataFrame, optional): Epidemiological or other data to be associated with each sample. Defaults to None.
+        """
         from pp_netlib.functions import generate_mst_network, save_graph
 
+        ## create a minimum-spanning tree
         self.mst_network = generate_mst_network(self.graph, self.backend)
         
         if viz_type == "mst":
-
+            ## set up output directory as {self.outdir}/mst; create it if it does not exist
             mst_outdir = os.path.join(self.outdir, "mst")
             if not os.path.exists(mst_outdir):
                 os.makedirs(mst_outdir)
+
             file_name = out_prefix+"_mst_network_data"
             save_graph(self.mst_network, backend = self.backend, outdir = mst_outdir, file_name = file_name, file_format = ".graphml")
 
+            ## visualise minimum-spanning tree
             if self.backend == "GT":
                 from pp_netlib.functions import draw_gt_mst, get_gt_clusters
 
@@ -264,12 +302,16 @@ class Network:
         if viz_type == "cytoscape":
             from pp_netlib.functions import write_cytoscape_csv
         
+            ## set up output directory as {self.outdir}/cytoscape; create it if it does not exist
             cytoscape_outdir = os.path.join(self.outdir, "cytoscape")
             if not os.path.exists(cytoscape_outdir):
                 os.makedirs(cytoscape_outdir)
+
+            ## save mst as out_prefix_mst.graphml, save full graph as out_prefix_cytoscape.graphml
             save_graph(self.graph, self.backend, cytoscape_outdir, out_prefix+"_cytoscape", ".graphml")
             save_graph(self.mst_network, self.backend, cytoscape_outdir, out_prefix+"_mst", ".graphml")
 
+            ## call functions to save individual graph components and write csv for cytoscape
             if self.backend == "GT":
                 from pp_netlib.functions import gt_save_graph_components, get_gt_clusters
                 gt_save_graph_components(self.graph, out_prefix, cytoscape_outdir)
@@ -284,10 +326,8 @@ class Network:
 
                 write_cytoscape_csv(os.path.join(cytoscape_outdir, out_prefix+".csv"), clustering.keys(), clustering, external_data)
 
-            
             # in progress
             # self.write_metadata(cytoscape_outdir, out_prefix, external_data)
-
 
     def load_network(self, network_file):
         """Load a premade graph from a network file.
@@ -300,11 +340,14 @@ class Network:
         
         # Load the network from the specified file
         file_name, file_extension = os.path.splitext(network_file)
+
         if file_extension == ".gt":
             self.graph = self.gt.load_graph(network_file)
             num_nodes = len(list(self.graph.vertices()))
             num_edges = len(list(self.graph.edges()))
             sys.stderr.write(f"Loaded network with {num_nodes} nodes and {num_edges} edges with {self.backend}.\n\n")
+
+            ## NX backend cannot open .gt file
             if self.backend == "NX":
                 sys.stderr.write("Network file provided is in .gt format and cannot be opened with networkx. Quitting.\n\n")
                 sys.exit(1)
@@ -341,9 +384,18 @@ class Network:
             raise RuntimeError("File format not recognised.\n\n")
 
     def add_to_network(self, new_data_df, new_vertex_labels):
+        """Add data to network
+
+        Args:
+            new_data_df (pd.DataFrame): Dataframe of edges with source, destination and weights columns
+            new_vertex_labels (list): List of new sample names to add to graph
+
+        """
 
         if self.graph is None:
             raise RuntimeError("No network found, cannot add data. Please load a network to update or construct a network with this data.\n\n")
+
+        new_vertex_labels = [new_sample.replace('.','_').replace(':','').replace('(','_').replace(')','_') for new_sample in new_vertex_labels]
 
         if self.backend == "GT":
             self.graph.add_vertex(len(new_vertex_labels)) ## add new vertices
@@ -379,6 +431,7 @@ class Network:
                     new_data_df.drop(columns=["weights"]) ## remove the weights column
                 self.graph.add_edges_from(new_data_df.values)
 
+        ## update vertex labels attribute
         self.vertex_labels += new_vertex_labels
 
     def write_metadata(self, meta_outdir, out_prefix, external_data):
@@ -409,9 +462,6 @@ class Network:
                 sample_metadata = pd.merge(node_data_df, external_data, on="sample_id")
 
             sample_metadata.to_csv(os.path.join(meta_outdir, out_prefix), sep="\t", index=False)
-            
-
-        return
 
     def save(self, file_name, file_format, to_save=None):
         """Save graph to file.
