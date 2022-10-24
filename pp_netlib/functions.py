@@ -200,7 +200,7 @@ def summarise(graph, backend):
 ####      .SAVE     ####
 ########################
 #TODO
-def prepare_graph(graph, labels, backend):
+def prepare_graph(graph, backend, labels = None):
     """Prepare a graph, by checking whether the graph nodes have id and component membership/clusteing attributes, and graph edges have weights.
         If "id" attribute missing, labels are applied as "id"; if labels not provided, "id" is set as "node_(node)"
         If "comp_membership" attribute missing, clusters are calculated and stored as node attributes
@@ -215,13 +215,13 @@ def prepare_graph(graph, labels, backend):
     def prep_gt(gt_graph, labels):
         import graph_tool.all as gt
         ## check that nodes have labels -- required
-        if "id" not in gt_graph.edge_properties:
+        if "id" not in gt_graph.vertex_properties:
             ## if no list of labels is provided, improvise node ids such that for node "i", id=str(i+1)
             if labels is None:
                 v_name_prop = gt_graph.new_vp("string")
                 gt_graph.vertex_properties["id"] = v_name_prop
                 for i in range(len([v for v in gt_graph.vertices()])):
-                    v_name_prop[gt_graph.vertex(i)] = "node"+str(i+1)
+                    v_name_prop[gt_graph.vertex(i)] = "node_"+str(i+1)
 
             ## if a list of labels is provided, apply labels to nodes
             elif labels is not None:
@@ -231,7 +231,7 @@ def prepare_graph(graph, labels, backend):
                     v_name_prop[gt_graph.vertex(i)] = labels[i]
 
         ## check if comp_membership is assigned -- make this consistent with clustering by making sure that comp 1 is the largest. Here, calling get_gt_clusters
-        if "comp_membership" not in gt_graph.edge_properties:
+        if "comp_membership" not in gt_graph.vertex_properties:
             clustering = get_gt_clusters(gt_graph)
             vprop = gt_graph.new_vp("int")
             gt_graph.vp.comp_membership = vprop
@@ -239,9 +239,14 @@ def prepare_graph(graph, labels, backend):
                 ## comp membership of vertex = the value corresponding to the id of that vertex in clustering
                 gt_graph.vp.comp_membership[vertex] = clustering[gt_graph.vp.id[vertex]]
 
-        ## check if edges have weights -- not required for most processes #TODO: is adding arbitrary weights a good idea? Weights are needed for grpah viz.
+        ## check if edges have weights -- not required for most processes #TODO: is adding arbitrary weights a good idea? Weights are needed for graph viz.
         if "weight" not in gt_graph.edge_properties:
-            print("Graph edges are not weighted.")
+            print("Graph edges are not weighted, adding 0.0001 as arbitrary weight to all edges.\n")
+            eweight = gt_graph.new_ep("float")
+            
+            arbitrary_weights = [0.0001]*len([e for e in graph.iter_edges()])
+            gt_graph.ep["weight"] = eweight
+            gt_graph.ep["weight"].a = np.array(arbitrary_weights)
 
         return gt_graph
 
@@ -262,13 +267,18 @@ def prepare_graph(graph, labels, backend):
 
         ## check if comp_membership is assigned -- could make things easier?
         if "comp_membership" not in list(list(nx_graph.nodes(data=True))[0][-1].keys()):
-            for idx, c in enumerate(sorted(nx.connected_components(nx_graph.graph))):
+            for idx, c in enumerate(sorted(nx.connected_components(nx_graph))):
                 for v in c:
-                    nx_graph.graph.nodes[v]["comp_membership"] = idx
+                    nx_graph.nodes[v]["comp_membership"] = idx
     
         ## check if edges have weights -- not required for most processes
         if "weight" not in list(list(nx_graph.edges(data=True))[0][-1].keys()):
-            print("Graph edges are not weighted.")
+            print("Graph edges are not weighted, adding 0.0001 as arbitrary weight to all edges.\n")
+
+            
+            for e in nx_graph.edges():
+                nx_graph.edges[e]["weight"] = 0.0001
+
 
         return nx_graph
 
@@ -690,15 +700,15 @@ def nx_save_graph_components(graph, out_prefix, outdir):
 ########################
 ####   .METADATA    ####
 ########################
-#TODO
 def gt_get_graph_data(graph):
     edge_data = defaultdict(list)
     node_data = defaultdict(list)
+    edge_list = list(graph.ep["weight"].a)
 
     for idx, e in enumerate(graph.iter_edges()):
         source_node = graph.vp.id[e[0]]
         target_node = graph.vp.id[e[1]]
-        edge_weight = graph.ep.weight[e]
+        edge_weight = edge_list[idx]
         edge_data[idx] = [source_node, target_node, edge_weight]
 
     for idx, v in enumerate(graph.iter_vertices()):
