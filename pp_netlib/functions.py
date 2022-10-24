@@ -267,9 +267,9 @@ def prepare_graph(graph, backend, labels = None):
 
         ## check if comp_membership is assigned -- could make things easier?
         if "comp_membership" not in list(list(nx_graph.nodes(data=True))[0][-1].keys()):
-            for idx, c in enumerate(sorted(nx.connected_components(nx_graph))):
-                for v in c:
-                    nx_graph.nodes[v]["comp_membership"] = idx
+            clustering = get_nx_clusters(nx_graph)
+            for v in graph.nodes():
+                graph.nodes[v]["comp_membership"] = clustering[v]
     
         ## check if edges have weights -- not required for most processes
         if "weight" not in list(list(nx_graph.edges(data=True))[0][-1].keys()):
