@@ -44,8 +44,8 @@ def __init__():
         weighted_graph.add_edge(src[i], dest[i], weight=weights[i])
 
     ## initiaising network
-    testing_network = Network(ref_list=["s1", "s2", "s3", "s4", "s5"], query_list=["s1", "s2", "s3", "s4", "s5"], backend="NX", outdir="tests/")
-    testing_weighted_network = Network(ref_list=["s1", "s2", "s3", "s4", "s5"], query_list=["s1", "s2", "s3", "s4", "s5"], backend="NX", outdir="tests/")
+    testing_network = Network(ref_list=["s1", "s2", "s3", "s4", "s5"], backend="NX", outdir="tests/")
+    testing_weighted_network = Network(ref_list=["s1", "s2", "s3", "s4", "s5"], backend="NX", outdir="tests/")
 
     return graph, weighted_graph, sample_edge_list, sample_df, sample_coo, weights, testing_network, testing_weighted_network
 

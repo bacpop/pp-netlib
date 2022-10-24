@@ -61,8 +61,8 @@ def __init__():
 
 
     ## intialising network
-    testing_network = Network(ref_list=["s1", "s2", "s3", "s4", "s5"], query_list=["s1", "s2", "s3", "s4", "s5"], backend="GT", outdir="tests/")
-    testing_weighted_network = Network(ref_list=["s1", "s2", "s3", "s4", "s5"], query_list=["s1", "s2", "s3", "s4", "s5"], backend="GT", outdir="tests/")
+    testing_network = Network(ref_list=["s1", "s2", "s3", "s4", "s5"], backend="GT", outdir="tests/")
+    testing_weighted_network = Network(ref_list=["s1", "s2", "s3", "s4", "s5"], backend="GT", outdir="tests/")
 
     return graph, weighted_graph, sample_df, sample_edge_list, sample_coo, testing_network, testing_weighted_network, weights
 

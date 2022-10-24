@@ -303,6 +303,14 @@ def save_graph(graph, backend, outdir, file_name, file_format):
 ####   .VISUALISE   ####
 ########################
 def gt_generate_mst(graph):
+    """Create a minimum-spanning tree with graph-tool
+
+    Args:
+        graph (gt.Graph): Graph from which to calculate mst
+
+    Returns:
+        gt.Graph: the mst generated from the graph
+    """
     import graph_tool.all as gt
 
     mst_edge_prop_map = gt.min_spanning_tree(graph, weights = graph.ep["weight"])
@@ -357,6 +365,14 @@ def gt_generate_mst(graph):
     return mst_network
 
 def nx_generate_mst(graph):
+    """Create a minimum-spanning tree with networkx
+
+    Args:
+        graph (nx.Graph): Graph from which to calculate mst
+
+    Returns:
+        nx.Graph: the mst generated from the graph
+    """
     import networkx as nx
 
     mst_network = nx.minimum_spanning_tree(graph)
@@ -462,6 +478,18 @@ def cu_generate_mst(graph): # currently commented out since unused.
     return
 
 def generate_mst_network(graph, backend):
+    """Wrapper around the *_generate_mst functions
+
+    Args:
+        graph (gt.Graph or nx.Graph): Graph from which to compute mst
+        backend (str): graph backend used ("GT" or "NX")
+
+    Raises:
+        unweighted_error_msg: RuntimeError if graph edges are unweighted
+
+    Returns:
+        gt.Graph or nx.Graph: the mst generated
+    """
     unweighted_error_msg = RuntimeError("MST passed unweighted graph, weighted tree required.")
 
     if backend == "GT":
@@ -485,6 +513,14 @@ def generate_mst_network(graph, backend):
     return mst_network
 
 def get_gt_clusters(graph):
+    """Calculate clusters from graph-tool graph
+
+    Args:
+        graph (gt.Graph): the graph from which to compute clusters
+
+    Returns:
+        dict: dictionary with node id as key and cluster number as value
+    """
     import graph_tool.all as gt
 
     vertex_labels = list(str(graph.vp["id"][v]) for v in graph.vertices())
@@ -510,6 +546,14 @@ def get_gt_clusters(graph):
     return clustering
 
 def get_nx_clusters(graph):
+    """Calculate clusters from networkx graph
+
+    Args:
+        graph (nx.Graph): the graph from which to compute clusters
+
+    Returns:
+        dict: dictionary with node id as key and cluster number as value
+    """
     import networkx as nx
 
     new_clusters = sorted(nx.connected_components(graph), key=len, reverse=True)
@@ -522,18 +566,12 @@ def get_nx_clusters(graph):
     return clustering
 
 def draw_gt_mst(mst, out_prefix, isolate_clustering, overwrite):
-    """Plot a layout of the minimum spanning tree
+    """Plot a layout of the minimum spanning tree with graph-tool
     Args:
-        mst (graph_tool.Graph)
-            A minimum spanning tree
-        outPrefix (str)
-            Output prefix for save files
-        isolate_clustering (dict)
-            Dictionary of ID: cluster, used for colouring vertices
-        clustering_name (str)
-            Name of clustering scheme to be used for colouring
-        overwrite (bool)
-            Overwrite existing output files
+        mst (gt.Graph): A minimum spanning tree
+        out_prefix (str): Output prefix for save files
+        isolate_clustering (dict): Dictionary of ID: cluster, used for colouring vertices
+        overwrite (bool): Overwrite existing output files
     """
     import graph_tool.all as gt
     
@@ -567,6 +605,13 @@ def draw_gt_mst(mst, out_prefix, isolate_clustering, overwrite):
                     output=graph2_file_name, output_size=(3000, 3000))
 
 def draw_nx_mst(mst, out_prefix, isolate_clustering, overwrite):
+    """Plot a layout of the minimum spanning tree with networkx
+    Args:
+        mst (nx.Graph): A minimum spanning tree
+        out_prefix (str): Output prefix for save files
+        isolate_clustering (dict): Dictionary of ID: cluster, used for colouring vertices
+        overwrite (bool): Overwrite existing output files
+    """
     import networkx as nx
     
     import matplotlib.pyplot as plt
@@ -606,6 +651,13 @@ def draw_nx_mst(mst, out_prefix, isolate_clustering, overwrite):
             plt.close()
 
 def gt_save_graph_components(graph, out_prefix, outdir):
+    """Save individual components of a graph-tool graph
+
+    Args:
+        graph (gt.Graph): Graph to save
+        out_prefix (str): prefix to be applied to output files
+        outdir (path/str): path to directory to save outputs to 
+    """
     import graph_tool.all as gt
 
     component_assignments, component_hist = gt.label_components(graph)
@@ -621,6 +673,13 @@ def gt_save_graph_components(graph, out_prefix, outdir):
         del G_copy
 
 def nx_save_graph_components(graph, out_prefix, outdir):
+    """Save individual components of a networkx graph
+
+    Args:
+        graph (nx.Graph): Graph to save
+        out_prefix (str): prefix to be applied to output files
+        outdir (path/str): path to directory to save outputs to 
+    """
     import networkx as nx
 
     for idx, c in enumerate(nx.connected_components(graph)):
