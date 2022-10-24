@@ -4,7 +4,7 @@ import os, sys
 import pandas as pd
 
 
-from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, summarise, save_graph
+from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, prepare_graph, summarise, save_graph
 
 class Network:
     def __init__(self, ref_list, outdir = "./", backend = None):
@@ -160,6 +160,8 @@ class Network:
             self.graph = construct_with_graphtool(network_data=network_data, vertex_labels=self.vertex_labels, weights=weights)
         elif self.backend == "NX":
             self.graph = construct_with_networkx(network_data=network_data, vertex_labels=self.vertex_labels, weights=weights)
+
+        prepare_graph(self.graph, backend = self.backend, labels = self.vertex_labels) # call to prepare_graph to add component_membership and edge weight if required
 
     def prune(self, type_isolate = None, threads = 4):
         """Method to prune full graph and produce a reference graph
@@ -362,7 +364,7 @@ class Network:
                 num_nodes = len(self.graph.nodes())
                 num_edges = len(self.graph.edges())
         
-            sys.stderr.write(f"Loaded network with {num_nodes} nodes and {num_edges} edges with {self.backend}.\n\n")
+            sys.stderr.write(f"Loaded network with {num_nodes} nodes and {num_edges} edges with {self.backend}.\n\n") 
 
         # useful for cugraph, to be added in later
         # elif file_extension in [".csv", ".tsv", ".txt"]:
@@ -383,13 +385,14 @@ class Network:
         else:
             raise RuntimeError("File format not recognised.\n\n")
 
+        prepare_graph(self.graph, backend = self.backend) # call to prepare_graph to add component_membership and edge weight if required
+
     def add_to_network(self, new_data_df, new_vertex_labels):
         """Add data to network
 
         Args:
             new_data_df (pd.DataFrame): Dataframe of edges with source, destination and weights columns
             new_vertex_labels (list): List of new sample names to add to graph
-
         """
 
         if self.graph is None:
@@ -434,7 +437,7 @@ class Network:
         ## update vertex labels attribute
         self.vertex_labels += new_vertex_labels
 
-    def write_metadata(self, meta_outdir, out_prefix, external_data):
+    def write_metadata(self, meta_outdir, out_prefix, external_data = None):
         
         if meta_outdir is None:
             meta_outdir = self.outdir
@@ -448,10 +451,10 @@ class Network:
             self.edge_data, self.sample_metadata = nx_get_graph_data(self.graph)
 
         
-        pd.DataFrame.from_dict(self.edge_data, orient="index", columns=["source", "target", "edge_weight"]).to_csv(os.path.join(meta_outdir, out_prefix), sep="\t", index=False)
+        pd.DataFrame.from_dict(self.edge_data, orient="index", columns=["source", "target", "edge_weight"]).to_csv(os.path.join(meta_outdir, out_prefix+"_edge_data.tsv"), sep="\t", index=False)
 
         if external_data is None:
-            pd.DataFrame.from_dict(self.sample_metadata, orient="index", columns=["sample_id", "sample_component"]).to_csv(os.path.join(meta_outdir, out_prefix), sep="\t", index=False)
+            pd.DataFrame.from_dict(self.sample_metadata, orient="index", columns=["sample_id", "sample_component"]).to_csv(os.path.join(meta_outdir, out_prefix+"_node_data.tsv"), sep="\t", index=False)
 
         else:
             node_data_df = pd.DataFrame.from_dict(self.sample_metadata, orient="index", columns=["sample_id", "sample_component"])
