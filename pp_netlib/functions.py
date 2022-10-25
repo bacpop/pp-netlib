@@ -210,15 +210,17 @@ def prepare_graph(graph, labels, backend):
             if labels is None:
                 v_name_prop = gt_graph.new_vp("string")
                 gt_graph.vertex_properties["id"] = v_name_prop
-                for i in range(len([v for v in gt_graph.vertices()])):
-                    v_name_prop[gt_graph.vertex(i)] = "node"+str(i+1)
+                for i, vertex in gt_graph.vertices:
+                    v_name_prop[vertex] = f"node{i+1}"
 
             ## if a list of labels is provided, apply labels to nodes
-            elif labels is not None:
+            else:
                 v_name_prop = gt_graph.new_vp("string")
                 gt_graph.vertex_properties["id"] = v_name_prop
-                for i in range(len([v for v in gt_graph.vertices()])):
-                    v_name_prop[gt_graph.vertex(i)] = labels[i]
+                for vertex, label in zip(gt_graph.vertices(), labels):
+                    v_name_prop[vertex] = label
+                # for i in range(len([v for v in gt_graph.vertices()])):
+                #     v_name_prop[gt_graph.vertex(i)] = labels[i]
 
         ## check if comp_membership is assigned -- could make things easier?
         if "comp_membership" not in gt_graph.edge_properties:
@@ -228,34 +230,36 @@ def prepare_graph(graph, labels, backend):
 
         ## check if edges have weights -- not required for most processes
         if "weight" not in gt_graph.edge_properties:
-            print("Graph edges are not weighted.")
+            sys.stderr.write("Graph edges are not weighted.")
 
         return gt_graph
 
 
     def prep_nx(nx_graph, labels):
         import networkx as nx
+        node_attrs = list(nx_graph.nodes(data=True))[0][-1].keys() # get keys of attribute dictionary associated with the first node, ie node attributes
+        edge_attrs = list(nx_graph.edges(data=True))[0][-1].keys() # get keys of attribute dictionary associated with the first edge, ie edge attributes
         ## check that nodes have labels -- required
-        if "id" not in list(list(nx_graph.nodes(data=True))[0][-1].keys()):
+        if "id" not in node_attrs:
             ## if no list of labels is provided, improvise node ids such that for node "i", id=str(i+1)
             if labels is None:
                 for idx, v in enumerate(nx_graph.nodes()):
                     nx_graph.nodes[v]["id"] = "node_"+str(idx+1)
 
             ## if a list of labels is provided, apply labels to nodes
-            elif labels is not None:
+            else:
                 for i, v in enumerate(nx_graph.nodes()):
                     nx_graph.nodes[v]["id"] = labels[i]
 
         ## check if comp_membership is assigned -- could make things easier?
-        if "comp_membership" not in list(list(nx_graph.nodes(data=True))[0][-1].keys()):
+        if "comp_membership" not in node_attrs:
             for idx, c in enumerate(sorted(nx.connected_components(nx_graph.graph))):
                 for v in c:
                     nx_graph.graph.nodes[v]["comp_membership"] = idx
     
         ## check if edges have weights -- not required for most processes
-        if "weight" not in list(list(nx_graph.edges(data=True))[0][-1].keys()):
-            print("Graph edges are not weighted.")
+        if "weight" not in edge_attrs:
+            sys.stderr.write("Graph edges are not weighted.")
 
         return nx_graph
 
@@ -296,12 +300,11 @@ def gt_generate_mst(graph):
     mst_edge_prop_map = gt.min_spanning_tree(graph, weights = graph.ep["weight"])
     mst_network = gt.GraphView(graph, efilt = mst_edge_prop_map)
     mst_network = gt.Graph(mst_network, prune = True)
-
-    num_components = 1
     seed_vertices = set()
 
     component_assignments, component_frequencies = gt.label_components(mst_network)
     num_components = len(component_frequencies)
+    ## if more than one component, get the node from each component, that has the highest out_degree
     if num_components > 1:
         for component_index in range(len(component_frequencies)):
             component_members = component_assignments.a == component_index
@@ -311,7 +314,6 @@ def gt_generate_mst(graph):
             seed_vertex = list(component_vertices[np.where(out_degrees == np.amax(out_degrees))])
             seed_vertices.add(seed_vertex[0]) # Can only add one otherwise not MST
 
-    if num_components > 1:
         # With graph-tool look to retrieve edges in larger graph
         connections = []
         max_weight = float(np.max(graph.edge_properties["weight"].a))
@@ -349,7 +351,6 @@ def nx_generate_mst(graph):
 
     mst_network = nx.minimum_spanning_tree(graph)
 
-    num_components = 1
     seed_vertices = set()
 
     num_components = nx.number_connected_components(mst_network)
@@ -406,10 +407,7 @@ def cu_generate_mst(graph):
     # Create MST
     #
 
-    mst_network = graph
-
     # Find seed nodes as those with greatest outdegree in each component
-    num_components = 1
     seed_vertices = set()
     
     mst_df = cugraph.components.connectivity.connected_components(mst_network)
@@ -471,6 +469,14 @@ def generate_mst_network(graph, backend):
 
     return mst_network
 
+def get_cluster_dict(clusters):
+    clustering = {}
+    for new_cls_idx, new_cluster in enumerate(clusters):
+        cls_id = new_cls_idx + 1
+        for cluster_member in new_cluster:
+            clustering[cluster_member] = cls_id
+    return clustering
+
 def get_gt_clusters(graph):
     import graph_tool.all as gt
 
@@ -488,11 +494,7 @@ def get_gt_clusters(graph):
         component_rank = component_frequency_ranks[component]
         new_clusters[component_rank].add(isolate_name)
 
-    clustering = {}
-    for new_cls_idx, new_cluster in enumerate(new_clusters):
-        cls_id = new_cls_idx + 1
-        for cluster_member in new_cluster:
-            clustering[cluster_member] = cls_id
+    clustering = get_cluster_dict(new_clusters)
 
     return clustering
 
@@ -500,11 +502,7 @@ def get_nx_clusters(graph):
     import networkx as nx
 
     new_clusters = sorted(nx.connected_components(graph), key=len, reverse=True)
-    clustering = {}
-    for new_cls_idx, new_cluster in enumerate(new_clusters):
-        cls_id = new_cls_idx + 1
-        for cluster_member in new_cluster:
-            clustering[cluster_member] = cls_id
+    clustering = get_cluster_dict(new_clusters)
 
     return clustering
 
@@ -604,7 +602,7 @@ def gt_save_graph_components(graph, out_prefix, outdir):
         G_copy = graph.copy()
         G_copy.remove_vertex(remove_list)
 
-        save_graph(G_copy, "GT", outdir, out_prefix+"_component_"+str(component_idx + 1), ".graphml")
+        save_graph(G_copy, "GT", outdir, f"{out_prefix}_component_{str(component_idx + 1)}", ".graphml")
         del G_copy
 
 def nx_save_graph_components(graph, out_prefix, outdir):
@@ -612,7 +610,7 @@ def nx_save_graph_components(graph, out_prefix, outdir):
 
     for idx, c in enumerate(nx.connected_components(graph)):
         subgraph = graph.subgraph(c)
-        save_graph(subgraph, "NX", outdir, out_prefix+"_component_"+str(idx + 1), ".graphml")
+        save_graph(subgraph, "NX", outdir, f"{out_prefix}_component_{idx + 1}", ".graphml")
         del subgraph
 
 ########################
