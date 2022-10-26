@@ -50,7 +50,7 @@ def test_add(ref_graph, test_graph, new_data):
         try:
             assert list(test_graph.graph.edges.data()) == list(ref_graph.graph.edges.data())
             print("NX Edge data match.")
-            assert list(test_graph.graph.nodes.data()) == list(ref_graph.graph.nodes.data())
+            assert list(test_graph.graph.nodes.data("id")) == list(ref_graph.graph.nodes.data("id"))
             print("NX Vertex data match.\n\n")
         except AssertionError as ae:
             print(f"Something went wrong when adding with NX\n\n")

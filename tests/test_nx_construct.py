@@ -60,11 +60,11 @@ def nx_test_from_df(data_df, graph, weighted_graph, network, weighted_network, w
     weighted_edges = list(weighted_graph.edges.data())
     weighted_test_edges = list(weighted_network.graph.edges.data())
 
-    nodes = list(graph.nodes.data())
-    test_nodes = list(network.graph.nodes.data())
+    nodes = list(graph.nodes.data("id"))
+    test_nodes = list(network.graph.nodes.data("id"))
 
-    w_nodes = list(weighted_graph.nodes.data())
-    w_test_nodes = list(weighted_network.graph.nodes.data())
+    w_nodes = list(weighted_graph.nodes.data("id"))
+    w_test_nodes = list(weighted_network.graph.nodes.data("id"))
 
     try:
         assert edges == test_edges
@@ -87,11 +87,11 @@ def nx_test_from_list(data_list, graph, weighted_graph, network, weighted_networ
     weighted_edges = list(weighted_graph.edges.data())
     weighted_test_edges = list(weighted_network.graph.edges.data())
 
-    nodes = list(graph.nodes.data())
-    test_nodes = list(network.graph.nodes.data())
+    nodes = list(graph.nodes.data("id"))
+    test_nodes = list(network.graph.nodes.data("id"))
 
-    w_nodes = list(weighted_graph.nodes.data())
-    w_test_nodes = list(weighted_network.graph.nodes.data())
+    w_nodes = list(weighted_graph.nodes.data("id"))
+    w_test_nodes = list(weighted_network.graph.nodes.data("id"))
 
     try:
         assert edges == test_edges
@@ -110,8 +110,8 @@ def nx_test_from_coo(data_coo, weighted_graph, weighted_network):
     weighted_edges = list(weighted_graph.edges.data())
     weighted_test_edges = list(weighted_network.graph.edges.data())
 
-    w_nodes = list(weighted_graph.nodes.data())
-    w_test_nodes = list(weighted_network.graph.nodes.data())
+    w_nodes = list(weighted_graph.nodes.data("id"))
+    w_test_nodes = list(weighted_network.graph.nodes.data("id"))
 
     try:
         assert weighted_edges == weighted_test_edges
