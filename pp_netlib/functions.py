@@ -220,15 +220,17 @@ def prepare_graph(graph, backend, labels = None):
             if labels is None:
                 v_name_prop = gt_graph.new_vp("string")
                 gt_graph.vertex_properties["id"] = v_name_prop
-                for i in range(len([v for v in gt_graph.vertices()])):
-                    v_name_prop[gt_graph.vertex(i)] = "node_"+str(i+1)
+                for i, vertex in gt_graph.vertices:
+                    v_name_prop[vertex] = f"node{i+1}"
 
             ## if a list of labels is provided, apply labels to nodes
-            elif labels is not None:
+            else:
                 v_name_prop = gt_graph.new_vp("string")
                 gt_graph.vertex_properties["id"] = v_name_prop
-                for i in range(len([v for v in gt_graph.vertices()])):
-                    v_name_prop[gt_graph.vertex(i)] = labels[i]
+                for vertex, label in zip(gt_graph.vertices(), labels):
+                    v_name_prop[vertex] = label
+                # for i in range(len([v for v in gt_graph.vertices()])):
+                #     v_name_prop[gt_graph.vertex(i)] = labels[i]
 
         ## check if comp_membership is assigned -- make this consistent with clustering by making sure that comp 1 is the largest. Here, calling get_gt_clusters
         if "comp_membership" not in gt_graph.vertex_properties:
@@ -241,39 +243,36 @@ def prepare_graph(graph, backend, labels = None):
 
         ## check if edges have weights -- not required for most processes #TODO: is adding arbitrary weights a good idea? Weights are needed for graph viz.
         if "weight" not in gt_graph.edge_properties:
-            print("Graph edges are not weighted, adding 0.0001 as arbitrary weight to all edges.\n")
-            eweight = gt_graph.new_ep("float")
-            
-            arbitrary_weights = [0.0001]*len([e for e in graph.iter_edges()])
-            gt_graph.ep["weight"] = eweight
-            gt_graph.ep["weight"].a = np.array(arbitrary_weights)
+            sys.stderr.write("Graph edges are not weighted.")
 
         return gt_graph
 
 
     def prep_nx(nx_graph, labels):
         import networkx as nx
+        node_attrs = list(nx_graph.nodes(data=True))[0][-1].keys() # get keys of attribute dictionary associated with the first node, ie node attributes
+        edge_attrs = list(nx_graph.edges(data=True))[0][-1].keys() # get keys of attribute dictionary associated with the first edge, ie edge attributes
         ## check that nodes have labels -- required
-        if "id" not in list(list(nx_graph.nodes(data=True))[0][-1].keys()):
+        if "id" not in node_attrs:
             ## if no list of labels is provided, improvise node ids such that for node "i", id=str(i+1)
             if labels is None:
                 for idx, v in enumerate(nx_graph.nodes()):
                     nx_graph.nodes[v]["id"] = "node_"+str(idx+1)
 
             ## if a list of labels is provided, apply labels to nodes
-            elif labels is not None:
+            else:
                 for i, v in enumerate(nx_graph.nodes()):
                     nx_graph.nodes[v]["id"] = labels[i]
 
         ## check if comp_membership is assigned -- could make things easier?
-        if "comp_membership" not in list(list(nx_graph.nodes(data=True))[0][-1].keys()):
+        if "comp_membership" not in node_attrs:
             clustering = get_nx_clusters(nx_graph)
             for v in graph.nodes():
                 graph.nodes[v]["comp_membership"] = clustering[v]
     
         ## check if edges have weights -- not required for most processes
-        if "weight" not in list(list(nx_graph.edges(data=True))[0][-1].keys()):
-            print("Graph edges are not weighted, adding 0.0001 as arbitrary weight to all edges.\n")
+        if "weight" not in edge_attrs:
+            sys.stderr.write("Graph edges are not weighted, adding 0.0001 as arbitrary weight to all edges.\n")
 
             
             for e in nx_graph.edges():
@@ -326,12 +325,11 @@ def gt_generate_mst(graph):
     mst_edge_prop_map = gt.min_spanning_tree(graph, weights = graph.ep["weight"])
     mst_network = gt.GraphView(graph, efilt = mst_edge_prop_map)
     mst_network = gt.Graph(mst_network, prune = True)
-
-    num_components = 1
     seed_vertices = set()
 
     component_assignments, component_frequencies = gt.label_components(mst_network)
     num_components = len(component_frequencies)
+    ## if more than one component, get the node from each component, that has the highest out_degree
     if num_components > 1:
         for component_index in range(len(component_frequencies)):
             component_members = component_assignments.a == component_index
@@ -341,7 +339,6 @@ def gt_generate_mst(graph):
             seed_vertex = list(component_vertices[np.where(out_degrees == np.amax(out_degrees))])
             seed_vertices.add(seed_vertex[0]) # Can only add one otherwise not MST
 
-    if num_components > 1:
         # With graph-tool look to retrieve edges in larger graph
         connections = []
         max_weight = float(np.max(graph.edge_properties["weight"].a))
@@ -387,7 +384,6 @@ def nx_generate_mst(graph):
 
     mst_network = nx.minimum_spanning_tree(graph)
 
-    num_components = 1
     seed_vertices = set()
 
     num_components = nx.number_connected_components(mst_network)
@@ -427,22 +423,22 @@ def nx_generate_mst(graph):
 
     return mst_network
 
-def cu_generate_mst(graph): # currently commented out since unused.
-#     import cugraph, cudf
-#     """Generate a minimum spanning tree from a network
-#     Args:
-#        G (network)
-#            Graph tool network
-#        from_cugraph (bool)
-#             If a pre-calculated MST from cugraph
-#             [default = False]
-#     Returns:
-#        mst_network (str)
-#            Minimum spanning tree (as graph-tool graph)
-#     """
-#     #
-#     # Create MST
-#     #
+def cu_generate_mst(graph):
+    import cugraph, cudf
+    """Generate a minimum spanning tree from a network
+    Args:
+       G (network)
+           Graph tool network
+       from_cugraph (bool)
+            If a pre-calculated MST from cugraph
+            [default = False]
+    Returns:
+       mst_network (str)
+           Minimum spanning tree (as graph-tool graph)
+    """
+    #
+    # Create MST
+    #
 
 #     mst_network = graph
 
@@ -450,56 +446,43 @@ def cu_generate_mst(graph): # currently commented out since unused.
 #     num_components = 1
 #     seed_vertices = set()
     
-#     mst_df = cugraph.components.connectivity.connected_components(mst_network)
-#     num_components_idx = mst_df["labels"].max()
-#     num_components = mst_df.iloc[num_components_idx]["labels"]
-#     if num_components > 1:
-#         mst_df["degree"] = mst_network.in_degree()["degree"]
-#         # idxmax only returns first occurrence of maximum so should maintain
-#         # MST - check cuDF implementation is the same
-#         max_indices = mst_df.groupby(["labels"])["degree"].idxmax()
-#         seed_vertices = mst_df.iloc[max_indices]["vertex"]
+    mst_df = cugraph.components.connectivity.connected_components(mst_network)
+    num_components_idx = mst_df["labels"].max()
+    num_components = mst_df.iloc[num_components_idx]["labels"]
+    if num_components > 1:
+        mst_df["degree"] = mst_network.in_degree()["degree"]
+        # idxmax only returns first occurrence of maximum so should maintain
+        # MST - check cuDF implementation is the same
+        max_indices = mst_df.groupby(["labels"])["degree"].idxmax()
+        seed_vertices = mst_df.iloc[max_indices]["vertex"]
 
-#     # If multiple components, add distances between seed nodes
-#     if num_components > 1:
+    # # If multiple components, add distances between seed nodes
+    # if num_components > 1:
 
-#         # Extract edges and maximum edge length - as DF for cugraph
-#         # list of tuples for graph-tool
+    #     # Extract edges and maximum edge length - as DF for cugraph
+    #     # list of tuples for graph-tool
         
-#         # With cugraph the MST is already calculated
-#         # so no extra edges can be retrieved from the graph
-#         G_df = graph.view_edge_list()
-#         max_weight = G_df["weights"].max()
-#         first_seed = seed_vertices.iloc[0]
-#         G_seed_link_df = cudf.DataFrame()
-#         G_seed_link_df["dst"] = seed_vertices.iloc[1:seed_vertices.size]
-#         G_seed_link_df["src"] = seed_vertices.iloc[0]
-#         G_seed_link_df["weights"] = seed_vertices.iloc[0]
-#         G_df = G_df.append(G_seed_link_df)
+    #     # With cugraph the MST is already calculated
+    #     # so no extra edges can be retrieved from the graph
+    #     G_df = graph.view_edge_list()
+    #     max_weight = G_df["weights"].max()
+    #     first_seed = seed_vertices.iloc[0]
+    #     G_seed_link_df = cudf.DataFrame()
+    #     G_seed_link_df["dst"] = seed_vertices.iloc[1:seed_vertices.size]
+    #     G_seed_link_df["src"] = seed_vertices.iloc[0]
+    #     G_seed_link_df["weights"] = seed_vertices.iloc[0]
+    #     G_df = G_df.append(G_seed_link_df)
 
-#     # Construct graph
-#     mst_network = cugraph.Graph()
-#     G_df.rename(columns={"src": "source","dst": "destination"}, inplace=True)
-#     mst_network.from_cudf_edgelist(G_df, edge_attr="weights", renumber=False)
+    # # Construct graph
+    # mst_network = cugraph.Graph()
+    # G_df.rename(columns={"src": "source","dst": "destination"}, inplace=True)
+    # mst_network.from_cudf_edgelist(G_df, edge_attr="weights", renumber=False)
 
-#     sys.stderr.write("Completed calculation of minimum-spanning tree with CU.\n")
+    # sys.stderr.write("Completed calculation of minimum-spanning tree with CU.\n")
 
-#     return mst_network
-    return
+    # return mst_network
 
 def generate_mst_network(graph, backend):
-    """Wrapper around the *_generate_mst functions
-
-    Args:
-        graph (gt.Graph or nx.Graph): Graph from which to compute mst
-        backend (str): graph backend used ("GT" or "NX")
-
-    Raises:
-        unweighted_error_msg: RuntimeError if graph edges are unweighted
-
-    Returns:
-        gt.Graph or nx.Graph: the mst generated
-    """
     unweighted_error_msg = RuntimeError("MST passed unweighted graph, weighted tree required.")
 
     if backend == "GT":
@@ -521,6 +504,14 @@ def generate_mst_network(graph, backend):
             mst_network = cu_generate_mst(graph)
 
     return mst_network
+
+def get_cluster_dict(clusters):
+    clustering = {}
+    for new_cls_idx, new_cluster in enumerate(clusters):
+        cls_id = new_cls_idx + 1
+        for cluster_member in new_cluster:
+            clustering[cluster_member] = cls_id
+    return clustering
 
 def get_gt_clusters(graph):
     """Calculate clusters from graph-tool graph
@@ -547,11 +538,7 @@ def get_gt_clusters(graph):
         component_rank = component_frequency_ranks[component]
         new_clusters[component_rank].add(isolate_name)
 
-    clustering = {}
-    for new_cls_idx, new_cluster in enumerate(new_clusters):
-        cls_id = new_cls_idx + 1
-        for cluster_member in new_cluster:
-            clustering[cluster_member] = cls_id
+    clustering = get_cluster_dict(new_clusters)
 
     return clustering
 
@@ -567,11 +554,7 @@ def get_nx_clusters(graph):
     import networkx as nx
 
     new_clusters = sorted(nx.connected_components(graph), key=len, reverse=True)
-    clustering = {}
-    for new_cls_idx, new_cluster in enumerate(new_clusters):
-        cls_id = new_cls_idx + 1
-        for cluster_member in new_cluster:
-            clustering[cluster_member] = cls_id
+    clustering = get_cluster_dict(new_clusters)
 
     return clustering
 
@@ -679,7 +662,7 @@ def gt_save_graph_components(graph, out_prefix, outdir):
         G_copy = graph.copy()
         G_copy.remove_vertex(remove_list)
 
-        save_graph(G_copy, "GT", outdir, out_prefix+"_component_"+str(component_idx + 1), ".graphml")
+        save_graph(G_copy, "GT", outdir, f"{out_prefix}_component_{str(component_idx + 1)}", ".graphml")
         del G_copy
 
 def nx_save_graph_components(graph, out_prefix, outdir):
@@ -694,7 +677,7 @@ def nx_save_graph_components(graph, out_prefix, outdir):
 
     for idx, c in enumerate(nx.connected_components(graph)):
         subgraph = graph.subgraph(c)
-        save_graph(subgraph, "NX", outdir, out_prefix+"_component_"+str(idx + 1), ".graphml")
+        save_graph(subgraph, "NX", outdir, f"{out_prefix}_component_{idx + 1}", ".graphml")
         del subgraph
 
 ########################

@@ -53,6 +53,7 @@ class Network:
             self.backend = os.getenv("GRAPH_BACKEND") ## read os env variable "GRAPH_BACKEND"
         else:
             self.backend = backend ## else use backend if specified
+        self.mst_network = None
 
         ## if no backend provided in either way, try to import graphtool first, then networkx, and quit if neither found (TODO: is this a good idea?)
         if backend is None and os.getenv("GRAPH_BACKEND") is None:
@@ -276,11 +277,9 @@ class Network:
         """
         from pp_netlib.functions import generate_mst_network, save_graph
 
-        ## create a minimum-spanning tree
-        self.mst_network = generate_mst_network(self.graph, self.backend)
         
         if viz_type == "mst":
-            ## set up output directory as {self.outdir}/mst; create it if it does not exist
+            self.mst_network = generate_mst_network(self.graph, self.backend)
             mst_outdir = os.path.join(self.outdir, "mst")
             if not os.path.exists(mst_outdir):
                 os.makedirs(mst_outdir)
@@ -311,7 +310,8 @@ class Network:
 
             ## save mst as out_prefix_mst.graphml, save full graph as out_prefix_cytoscape.graphml
             save_graph(self.graph, self.backend, cytoscape_outdir, out_prefix+"_cytoscape", ".graphml")
-            save_graph(self.mst_network, self.backend, cytoscape_outdir, out_prefix+"_mst", ".graphml")
+            if self.mst_network is not None:
+                save_graph(self.mst_network, self.backend, cytoscape_outdir, out_prefix+"_mst", ".graphml")
 
             ## call functions to save individual graph components and write csv for cytoscape
             if self.backend == "GT":
@@ -328,8 +328,6 @@ class Network:
 
                 write_cytoscape_csv(os.path.join(cytoscape_outdir, out_prefix+".csv"), clustering.keys(), clustering, external_data)
 
-            # in progress
-            # self.write_metadata(cytoscape_outdir, out_prefix, external_data)
 
     def load_network(self, network_file):
         """Load a premade graph from a network file.

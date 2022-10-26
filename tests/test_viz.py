@@ -61,7 +61,7 @@ def test_gt_cytoscape(sample_file):
     sample_gt_graph.load_network(sample_file)
 
     sample_gt_graph.visualize("cytoscape", "test_gt")
-    expected_outfiles = ["tests/cytoscape/test_gt_mst.graphml", "tests/cytoscape/test_gt_cytoscape.graphml", "tests/cytoscape/test_gt.csv"]
+    expected_outfiles = ["tests/cytoscape/test_gt_cytoscape.graphml", "tests/cytoscape/test_gt.csv"]
 
     num_components = len(set(gt.label_components(sample_gt_graph.graph)[0].a))
     for i in range (num_components):
@@ -85,7 +85,7 @@ def test_nx_cytoscape(sample_file):
     sample_nx_graph.load_network(sample_file)
 
     sample_nx_graph.visualize("cytoscape", "test_nx")
-    expected_outfiles = ["tests/cytoscape/test_nx_mst.graphml", "tests/cytoscape/test_nx_cytoscape.graphml", "tests/cytoscape/test_nx.csv"]
+    expected_outfiles = ["tests/cytoscape/test_nx_cytoscape.graphml", "tests/cytoscape/test_nx.csv"]
 
     num_components = nx.number_connected_components(sample_nx_graph.graph)
     for i in range (num_components):
