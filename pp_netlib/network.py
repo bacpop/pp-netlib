@@ -1,6 +1,7 @@
 from functools import partial
 from multiprocessing import Pool
 import os, sys
+import pandas as pd
 
 
 from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, summarise, save_graph
@@ -52,6 +53,7 @@ class Network:
         self.use_gpu = use_gpu
         self.graph = None
         self.ref_graph = None
+        self.mst_network = None
 
         if self.backend == "GT":
             import graph_tool.all as gt
@@ -235,10 +237,55 @@ class Network:
                 summary.write(summary_contents)
             summary.close()
 
-    def visualize(self):
-        # code for calling viz functions
-        print("visualizing network")
-        return #files associated with viz
+    def visualize(self, viz_type, out_prefix, external_data = None):
+        from pp_netlib.functions import generate_mst_network, save_graph
+
+        
+        
+        if viz_type == "mst":
+            self.mst_network = generate_mst_network(self.graph, self.backend)
+            mst_outdir = os.path.join(self.outdir, "mst")
+            if not os.path.exists(mst_outdir):
+                os.makedirs(mst_outdir)
+            file_name = out_prefix+"_mst_network_data"
+            save_graph(self.mst_network, backend = self.backend, outdir = mst_outdir, file_name = file_name, file_format = ".graphml")
+
+            if self.backend == "GT":
+                from pp_netlib.functions import draw_gt_mst, get_gt_clusters
+
+                isolate_clustering = get_gt_clusters(self.graph)
+                draw_gt_mst(mst = self.mst_network, out_prefix = os.path.join(mst_outdir, out_prefix), isolate_clustering=isolate_clustering, overwrite=True)
+            
+            if self.backend == "NX":
+                from pp_netlib.functions import draw_nx_mst, get_nx_clusters
+
+                isolate_clustering = get_nx_clusters(self.graph)
+                draw_nx_mst(mst=self.mst_network, out_prefix=os.path.join(mst_outdir, out_prefix), isolate_clustering=isolate_clustering, overwrite=True)
+
+        if viz_type == "cytoscape":
+            from pp_netlib.functions import write_cytoscape_csv
+        
+            cytoscape_outdir = os.path.join(self.outdir, "cytoscape")
+            if not os.path.exists(cytoscape_outdir):
+                os.makedirs(cytoscape_outdir)
+            save_graph(self.graph, self.backend, cytoscape_outdir, out_prefix+"_cytoscape", ".graphml")
+            if self.mst_network is not None:
+                save_graph(self.mst_network, self.backend, cytoscape_outdir, out_prefix+"_mst", ".graphml")
+
+            if self.backend == "GT":
+                from pp_netlib.functions import gt_save_graph_components, get_gt_clusters
+                gt_save_graph_components(self.graph, out_prefix, cytoscape_outdir)
+                clustering = get_gt_clusters(self.graph)
+
+                write_cytoscape_csv(os.path.join(cytoscape_outdir, out_prefix+".csv"), clustering.keys(), clustering, external_data)
+
+            if self.backend == "NX":
+                from pp_netlib.functions import nx_save_graph_components, get_nx_clusters
+                nx_save_graph_components(self.graph, out_prefix, cytoscape_outdir)
+                clustering = get_nx_clusters(self.graph)
+
+                write_cytoscape_csv(os.path.join(cytoscape_outdir, out_prefix+".csv"), clustering.keys(), clustering, external_data)
+
 
     def load_network(self, network_file):
         """Load a premade graph from a network file.
@@ -332,20 +379,8 @@ class Network:
 
         self.vertex_labels += new_vertex_labels
 
-    def _convert(self, intial_format, target_format):
-        ### TODO call load_network, use network_to_edges, then call construct, add check to prevent computation in case of missing imports
-
-        # if intial_format == "cugraph":
-        #     cugraph_dataframe = cugraph.to_pandas_edgelist(self.graph)
-
-
-
-        # if target_format == "cugraph" and not self.use_gpu:
-        #     sys.stderr.write("You have asked for your graph to be converted to cugraph format, but your system/environment seems to be missing gpu related imports. Converting anyway...")
-
+    def write_metadata(self, meta_outdir, out_prefix, external_data):
         
-
-        print(f"converting from {intial_format} to {target_format}")
         return
 
     def save(self, file_name, file_format, to_save=None):
