@@ -616,35 +616,6 @@ def nx_save_graph_components(graph, out_prefix, outdir):
 ########################
 ####   .METADATA    ####
 ########################
-#TODO
-def gt_get_graph_data(graph):
-    edge_data = defaultdict(list)
-    node_data = defaultdict(list)
-
-    for idx, e in enumerate(graph.iter_edges()):
-        source_node = graph.vp.id[e[0]]
-        target_node = graph.vp.id[e[1]]
-        edge_weight = graph.ep.weight[e]
-        edge_data[idx] = [source_node, target_node, edge_weight]
-
-    for idx, v in enumerate(graph.iter_vertices()):
-        node_id = graph.vp.id[v]
-        node_comp = graph.vp.comp_membership[v]
-        node_data[idx] = [node_id, node_comp]
-
-    return edge_data, node_data
-
-def nx_get_graph_data(graph):
-    edge_data = defaultdict(list)
-    node_data = defaultdict(list)
-
-    for idx, (s, t, w) in enumerate(graph.edges.data("weight")):
-        edge_data[idx] = [graph.nodes()[s]["id"], graph.nodes()[t]["id"], w]
-
-    for idx, (v, v_data) in enumerate(graph.nodes(data=True)):
-        node_data[idx] = [v_data["id"], v_data["comp_membership"]]
-    
-    return edge_data, node_data
 
 def write_cytoscape_csv(outfile, node_names, clustering, epi_csv = None, suffix = '_Cluster'):
     colnames = []

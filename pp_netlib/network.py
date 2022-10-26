@@ -53,6 +53,7 @@ class Network:
         self.use_gpu = use_gpu
         self.graph = None
         self.ref_graph = None
+        self.mst_network = None
 
         if self.backend == "GT":
             import graph_tool.all as gt
@@ -239,10 +240,10 @@ class Network:
     def visualize(self, viz_type, out_prefix, external_data = None):
         from pp_netlib.functions import generate_mst_network, save_graph
 
-        self.mst_network = generate_mst_network(self.graph, self.backend)
+        
         
         if viz_type == "mst":
-
+            self.mst_network = generate_mst_network(self.graph, self.backend)
             mst_outdir = os.path.join(self.outdir, "mst")
             if not os.path.exists(mst_outdir):
                 os.makedirs(mst_outdir)
@@ -268,7 +269,8 @@ class Network:
             if not os.path.exists(cytoscape_outdir):
                 os.makedirs(cytoscape_outdir)
             save_graph(self.graph, self.backend, cytoscape_outdir, out_prefix+"_cytoscape", ".graphml")
-            save_graph(self.mst_network, self.backend, cytoscape_outdir, out_prefix+"_mst", ".graphml")
+            if self.mst_network is not None:
+                save_graph(self.mst_network, self.backend, cytoscape_outdir, out_prefix+"_mst", ".graphml")
 
             if self.backend == "GT":
                 from pp_netlib.functions import gt_save_graph_components, get_gt_clusters
@@ -283,10 +285,6 @@ class Network:
                 clustering = get_nx_clusters(self.graph)
 
                 write_cytoscape_csv(os.path.join(cytoscape_outdir, out_prefix+".csv"), clustering.keys(), clustering, external_data)
-
-            
-            # in progress
-            # self.write_metadata(cytoscape_outdir, out_prefix, external_data)
 
 
     def load_network(self, network_file):
@@ -383,34 +381,6 @@ class Network:
 
     def write_metadata(self, meta_outdir, out_prefix, external_data):
         
-        if meta_outdir is None:
-            meta_outdir = self.outdir
-
-        if self.backend == "GT":
-            from pp_netlib.functions import gt_get_graph_data
-            self.edge_data, self.sample_metadata = gt_get_graph_data(self.graph)
-
-        if self.backend == "NX":
-            from pp_netlib.functions import nx_get_graph_data
-            self.edge_data, self.sample_metadata = nx_get_graph_data(self.graph)
-
-        
-        pd.DataFrame.from_dict(self.edge_data, orient="index", columns=["source", "target", "edge_weight"]).to_csv(os.path.join(meta_outdir, out_prefix), sep="\t", index=False)
-
-        if external_data is None:
-            pd.DataFrame.from_dict(self.sample_metadata, orient="index", columns=["sample_id", "sample_component"]).to_csv(os.path.join(meta_outdir, out_prefix), sep="\t", index=False)
-
-        else:
-            node_data_df = pd.DataFrame.from_dict(self.sample_metadata, orient="index", columns=["sample_id", "sample_component"])
-            if isinstance(external_data, str):
-                external_data_df = pd.read_csv(external_data, sep="\t", header=0)
-                sample_metadata = pd.merge(node_data_df, external_data_df, on="sample_id")
-            elif isinstance(external_data, pd.DataFrame):
-                sample_metadata = pd.merge(node_data_df, external_data, on="sample_id")
-
-            sample_metadata.to_csv(os.path.join(meta_outdir, out_prefix), sep="\t", index=False)
-            
-
         return
 
     def save(self, file_name, file_format, to_save=None):
