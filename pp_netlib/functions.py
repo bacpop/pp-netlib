@@ -243,7 +243,7 @@ def prepare_graph(graph, backend, labels = None):
 
         ## check if edges have weights -- not required for most processes #TODO: is adding arbitrary weights a good idea? Weights are needed for graph viz.
         if "weight" not in gt_graph.edge_properties:
-            sys.stderr.write("Graph edges are not weighted.")
+            sys.stderr.write("Graph edges are not weighted.\n")
 
         return gt_graph
 
@@ -272,11 +272,7 @@ def prepare_graph(graph, backend, labels = None):
     
         ## check if edges have weights -- not required for most processes
         if "weight" not in edge_attrs:
-            sys.stderr.write("Graph edges are not weighted, adding 0.0001 as arbitrary weight to all edges.\n")
-
-            
-            for e in nx_graph.edges():
-                nx_graph.edges[e]["weight"] = 0.0001
+            sys.stderr.write("Graph edges are not weighted.\n")
 
 
         return nx_graph
@@ -424,21 +420,21 @@ def nx_generate_mst(graph):
     return mst_network
 
 def cu_generate_mst(graph):
-    import cugraph, cudf
-    """Generate a minimum spanning tree from a network
-    Args:
-       G (network)
-           Graph tool network
-       from_cugraph (bool)
-            If a pre-calculated MST from cugraph
-            [default = False]
-    Returns:
-       mst_network (str)
-           Minimum spanning tree (as graph-tool graph)
-    """
-    #
-    # Create MST
-    #
+#     import cugraph, cudf
+#     """Generate a minimum spanning tree from a network
+#     Args:
+#        G (network)
+#            Graph tool network
+#        from_cugraph (bool)
+#             If a pre-calculated MST from cugraph
+#             [default = False]
+#     Returns:
+#        mst_network (str)
+#            Minimum spanning tree (as graph-tool graph)
+#     """
+#     #
+#     # Create MST
+#     #
 
 #     mst_network = graph
 
@@ -446,41 +442,42 @@ def cu_generate_mst(graph):
 #     num_components = 1
 #     seed_vertices = set()
     
-    mst_df = cugraph.components.connectivity.connected_components(mst_network)
-    num_components_idx = mst_df["labels"].max()
-    num_components = mst_df.iloc[num_components_idx]["labels"]
-    if num_components > 1:
-        mst_df["degree"] = mst_network.in_degree()["degree"]
-        # idxmax only returns first occurrence of maximum so should maintain
-        # MST - check cuDF implementation is the same
-        max_indices = mst_df.groupby(["labels"])["degree"].idxmax()
-        seed_vertices = mst_df.iloc[max_indices]["vertex"]
+#     mst_df = cugraph.components.connectivity.connected_components(mst_network)
+#     num_components_idx = mst_df["labels"].max()
+#     num_components = mst_df.iloc[num_components_idx]["labels"]
+#     if num_components > 1:
+#         mst_df["degree"] = mst_network.in_degree()["degree"]
+#         # idxmax only returns first occurrence of maximum so should maintain
+#         # MST - check cuDF implementation is the same
+#         max_indices = mst_df.groupby(["labels"])["degree"].idxmax()
+#         seed_vertices = mst_df.iloc[max_indices]["vertex"]
 
-    # # If multiple components, add distances between seed nodes
-    # if num_components > 1:
+#     # If multiple components, add distances between seed nodes
+#     if num_components > 1:
 
-    #     # Extract edges and maximum edge length - as DF for cugraph
-    #     # list of tuples for graph-tool
+#         # Extract edges and maximum edge length - as DF for cugraph
+#         # list of tuples for graph-tool
         
-    #     # With cugraph the MST is already calculated
-    #     # so no extra edges can be retrieved from the graph
-    #     G_df = graph.view_edge_list()
-    #     max_weight = G_df["weights"].max()
-    #     first_seed = seed_vertices.iloc[0]
-    #     G_seed_link_df = cudf.DataFrame()
-    #     G_seed_link_df["dst"] = seed_vertices.iloc[1:seed_vertices.size]
-    #     G_seed_link_df["src"] = seed_vertices.iloc[0]
-    #     G_seed_link_df["weights"] = seed_vertices.iloc[0]
-    #     G_df = G_df.append(G_seed_link_df)
+#         # With cugraph the MST is already calculated
+#         # so no extra edges can be retrieved from the graph
+#         G_df = graph.view_edge_list()
+#         max_weight = G_df["weights"].max()
+#         first_seed = seed_vertices.iloc[0]
+#         G_seed_link_df = cudf.DataFrame()
+#         G_seed_link_df["dst"] = seed_vertices.iloc[1:seed_vertices.size]
+#         G_seed_link_df["src"] = seed_vertices.iloc[0]
+#         G_seed_link_df["weights"] = seed_vertices.iloc[0]
+#         G_df = G_df.append(G_seed_link_df)
 
-    # # Construct graph
-    # mst_network = cugraph.Graph()
-    # G_df.rename(columns={"src": "source","dst": "destination"}, inplace=True)
-    # mst_network.from_cudf_edgelist(G_df, edge_attr="weights", renumber=False)
+#     # Construct graph
+#     mst_network = cugraph.Graph()
+#     G_df.rename(columns={"src": "source","dst": "destination"}, inplace=True)
+#     mst_network.from_cudf_edgelist(G_df, edge_attr="weights", renumber=False)
 
-    # sys.stderr.write("Completed calculation of minimum-spanning tree with CU.\n")
+#     sys.stderr.write("Completed calculation of minimum-spanning tree with CU.\n")
 
-    # return mst_network
+#     return mst_network
+    return
 
 def generate_mst_network(graph, backend):
     unweighted_error_msg = RuntimeError("MST passed unweighted graph, weighted tree required.")

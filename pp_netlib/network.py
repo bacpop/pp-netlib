@@ -46,6 +46,7 @@ class Network:
         self.ref_list = ref_list # list of sample names
         self.graph = None # empty graph
         self.ref_graph = None # empty pruned graph
+        self.mst_network = None # empty mst
         
         ## if backend not provided when Network is initialised, try to read backend from env
         ## if backend is provided during init AND set as env var, value provided during init will be used.
@@ -53,7 +54,6 @@ class Network:
             self.backend = os.getenv("GRAPH_BACKEND") ## read os env variable "GRAPH_BACKEND"
         else:
             self.backend = backend ## else use backend if specified
-        self.mst_network = None
 
         ## if no backend provided in either way, try to import graphtool first, then networkx, and quit if neither found (TODO: is this a good idea?)
         if backend is None and os.getenv("GRAPH_BACKEND") is None:
