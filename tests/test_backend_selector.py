@@ -1,11 +1,8 @@
 import os
 import graph_tool
-import numpy as np
-import pandas as pd
 import argparse
 import graph_tool.all as gt
 import networkx as nx
-from scipy.sparse import coo_matrix
 
 from pp_netlib.network import Network
 

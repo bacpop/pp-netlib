@@ -366,7 +366,7 @@ class Network:
         else:
             raise RuntimeError("File format not recognised.\n\n")
 
-        prepare_graph(self.graph, backend = self.backend) # call to prepare_graph to add component_membership and edge weight if required
+        prepare_graph(self.graph, backend = self.backend) # call to prepare_graph to add component_membership
 
     def add_to_network(self, new_data_df, new_vertex_labels):
         """Add data to network

@@ -1,6 +1,4 @@
 import os
-import graph_tool.all as gt
-import networkx as nx
 
 from pp_netlib.network import Network
 

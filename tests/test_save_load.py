@@ -1,7 +1,4 @@
 import os
-import networkx as nx
-import graph_tool.all as gt
-
 from pp_netlib.network import Network
 
 def __init__():

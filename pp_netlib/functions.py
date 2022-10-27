@@ -199,7 +199,6 @@ def summarise(graph, backend):
 ########################
 ####      .SAVE     ####
 ########################
-#TODO
 def prepare_graph(graph, backend, labels = None):
     """Prepare a graph, by checking whether the graph nodes have id and component membership/clusteing attributes, and graph edges have weights.
         If "id" attribute missing, labels are applied as "id"; if labels not provided, "id" is set as "node_(node)"
@@ -213,7 +212,6 @@ def prepare_graph(graph, backend, labels = None):
     """
 
     def prep_gt(gt_graph, labels):
-        import graph_tool.all as gt
         ## check that nodes have labels -- required
         if "id" not in gt_graph.vertex_properties:
             ## if no list of labels is provided, improvise node ids such that for node "i", id=str(i+1)
@@ -247,7 +245,6 @@ def prepare_graph(graph, backend, labels = None):
 
 
     def prep_nx(nx_graph, labels):
-        import networkx as nx
         node_attrs = list(nx_graph.nodes(data=True))[0][-1].keys() # get keys of attribute dictionary associated with the first node, ie node attributes
         edge_attrs = list(nx_graph.edges(data=True))[0][-1].keys() # get keys of attribute dictionary associated with the first edge, ie edge attributes
         ## check that nodes have labels -- required
@@ -287,7 +284,6 @@ def prepare_graph(graph, backend, labels = None):
 
 def save_graph(graph, backend, outdir, file_name, file_format):
     if backend == "GT":
-        import graph_tool.all as gt
         if file_format is None:
             graph.save(os.path.join(outdir, file_name+".gt"))
         elif file_format is not None:
@@ -359,7 +355,6 @@ def gt_generate_mst(graph):
         # Insert seed MST into original MST - may be possible to use graph_union with include=True & intersection
         deep_edges = seed_mst_network.get_edges([seed_mst_network.ep["weight"]])
         mst_network.add_edge_list(deep_edges)
-
 
     return mst_network
 
@@ -558,7 +553,6 @@ def draw_nx_mst(mst, out_prefix, isolate_clustering, overwrite):
             nx.draw_networkx_nodes(mst, pos=pos, node_size=10*deg, node_color=deg)
             nx.draw_networkx_edges(mst, pos=pos, edge_color=ebet, width=ebet)
             plt.axis("off")
-            # plt.show()
             plt.savefig(graph1_file_name)
             plt.close()
 
@@ -573,7 +567,6 @@ def draw_nx_mst(mst, out_prefix, isolate_clustering, overwrite):
             nx.draw_networkx_nodes(mst, pos=pos, node_size=100, node_color=[color for (node, color) in mst.nodes(data="plot_color")])
             nx.draw_networkx_edges(mst, pos=pos)
             plt.axis("off")
-            # plt.show()
             plt.savefig(graph2_file_name)
             plt.close()
 
