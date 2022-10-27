@@ -90,7 +90,6 @@ class Network:
             # import cupy as cp
             # from numba import cuda
             # import rmm
-            # use_gpu = True
 
     def construct(self, network_data, weights = None):
         """Method called on Network object. Constructs a graph using either graph-tool, networkx, or cugraph(TODO)
@@ -161,6 +160,8 @@ class Network:
             self.graph = construct_with_graphtool(network_data=network_data, vertex_labels=self.vertex_labels, weights=weights)
         elif self.backend == "NX":
             self.graph = construct_with_networkx(network_data=network_data, vertex_labels=self.vertex_labels, weights=weights)
+        elif self.backend == "CU":
+            raise NotImplementedError("GPU graph not yet implemented")
 
         prepare_graph(self.graph, backend = self.backend, labels = self.vertex_labels) # call to prepare_graph to add component_membership and edge weight if required
 
@@ -272,12 +273,11 @@ class Network:
         Args:
             viz_type (str): can be either "mst" or "cytoscape". If "mst", minimum-spanning tree visualisations are produced as .png files, mst saved as .graphml. 
                     If "cytoscape", the graph, individual components, and minimum spanning tree are saved as .graphml and a csv file containing cluster info is also produced.
-            out_prefix (str): the prefix to apply to all output files
+            out_prefix (str): the prefix to apply to all output files (not a path)
             external_data (path/str *OR* pd.DataFrame, optional): Epidemiological or other data to be associated with each sample. Defaults to None.
         """
         from pp_netlib.functions import generate_mst_network, save_graph
 
-        
         if viz_type == "mst":
             self.mst_network = generate_mst_network(self.graph, self.backend)
             mst_outdir = os.path.join(self.outdir, "mst")
@@ -328,7 +328,6 @@ class Network:
 
                 write_cytoscape_csv(os.path.join(cytoscape_outdir, out_prefix+".csv"), clustering.keys(), clustering, external_data)
 
-
     def load_network(self, network_file):
         """Load a premade graph from a network file.
 
@@ -363,22 +362,6 @@ class Network:
                 num_edges = len(self.graph.edges())
         
             sys.stderr.write(f"Loaded network with {num_nodes} nodes and {num_edges} edges with {self.backend}.\n\n") 
-
-        # useful for cugraph, to be added in later
-        # elif file_extension in [".csv", ".tsv", ".txt"]:
-        #     sys.stderr.write("The network file appears to be in tabular format, please load it as a dataframe and use the construct method to build a graph.\n")
-        #     sys.exit(1)
-        
-        # graph_df = cudf.read_csv(network_file, compression = "gzip")
-        # if "src" in graph_df.columns:
-        #     graph_df.rename(columns={"src": "source", "dst": "destination"}, inplace=True)
-        # genome_network = cugraph.Graph()
-        # if "weights" in graph_df.columns:
-        #     graph_df = graph_df[["source", "destination", "weights"]]
-        #     genome_network.from_cudf_edgelist(graph_df, edge_attr = "weights", renumber = False)
-        # else:
-        #     genome_network.from_cudf_edgelist(graph_df, renumber = False)
-        # sys.stderr.write("Network loaded: " + str(genome_network.number_of_vertices()) + " samples\n")
 
         else:
             raise RuntimeError("File format not recognised.\n\n")
@@ -449,8 +432,14 @@ class Network:
             self.edge_data, self.sample_metadata = nx_get_graph_data(self.graph)
 
         
-        pd.DataFrame.from_dict(self.edge_data, orient="index", columns=["source", "target", "edge_weight"]).to_csv(os.path.join(meta_outdir, out_prefix+"_edge_data.tsv"), sep="\t", index=False)
+        edge_data = pd.DataFrame.from_dict(self.edge_data, orient="index")
+        if len(edge_data.columns) == 2:
+            edge_data.columns = ["source", "target"]
+        else:
+            edge_data.columns = ["source", "target", "weight"]
 
+        edge_data.to_csv(os.path.join(meta_outdir, out_prefix+"_edge_data.tsv"), sep="\t", index=False)
+        
         if external_data is None:
             pd.DataFrame.from_dict(self.sample_metadata, orient="index", columns=["sample_id", "sample_component"]).to_csv(os.path.join(meta_outdir, out_prefix+"_node_data.tsv"), sep="\t", index=False)
 
@@ -494,6 +483,3 @@ class Network:
         if to_save == "ref_graph" or to_save == "both":
             save_graph(graph=self.ref_graph, backend=self.backend, outdir = self.outdir, file_name=file_name+".pruned", file_format=file_format)
 
-        # useful with cugraph, to be added in later
-        # if self.backend == "CU":
-        #     self.graph.to_pandas_edgelist().to_csv(file_name + ".csv.gz", compression="gzip", index = False)

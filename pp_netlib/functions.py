@@ -220,7 +220,7 @@ def prepare_graph(graph, backend, labels = None):
             if labels is None:
                 v_name_prop = gt_graph.new_vp("string")
                 gt_graph.vertex_properties["id"] = v_name_prop
-                for i, vertex in gt_graph.vertices:
+                for i, vertex in enumerate(gt_graph.vertices()):
                     v_name_prop[vertex] = f"node{i+1}"
 
             ## if a list of labels is provided, apply labels to nodes
@@ -229,8 +229,6 @@ def prepare_graph(graph, backend, labels = None):
                 gt_graph.vertex_properties["id"] = v_name_prop
                 for vertex, label in zip(gt_graph.vertices(), labels):
                     v_name_prop[vertex] = label
-                # for i in range(len([v for v in gt_graph.vertices()])):
-                #     v_name_prop[gt_graph.vertex(i)] = labels[i]
 
         ## check if comp_membership is assigned -- make this consistent with clustering by making sure that comp 1 is the largest. Here, calling get_gt_clusters
         if "comp_membership" not in gt_graph.vertex_properties:
@@ -274,9 +272,7 @@ def prepare_graph(graph, backend, labels = None):
         if "weight" not in edge_attrs:
             sys.stderr.write("Graph edges are not weighted.\n")
 
-
         return nx_graph
-
 
     if graph is None:
         raise RuntimeError("Graph not constructed or loaded")
@@ -419,66 +415,6 @@ def nx_generate_mst(graph):
 
     return mst_network
 
-def cu_generate_mst(graph):
-#     import cugraph, cudf
-#     """Generate a minimum spanning tree from a network
-#     Args:
-#        G (network)
-#            Graph tool network
-#        from_cugraph (bool)
-#             If a pre-calculated MST from cugraph
-#             [default = False]
-#     Returns:
-#        mst_network (str)
-#            Minimum spanning tree (as graph-tool graph)
-#     """
-#     #
-#     # Create MST
-#     #
-
-#     mst_network = graph
-
-#     # Find seed nodes as those with greatest outdegree in each component
-#     num_components = 1
-#     seed_vertices = set()
-    
-#     mst_df = cugraph.components.connectivity.connected_components(mst_network)
-#     num_components_idx = mst_df["labels"].max()
-#     num_components = mst_df.iloc[num_components_idx]["labels"]
-#     if num_components > 1:
-#         mst_df["degree"] = mst_network.in_degree()["degree"]
-#         # idxmax only returns first occurrence of maximum so should maintain
-#         # MST - check cuDF implementation is the same
-#         max_indices = mst_df.groupby(["labels"])["degree"].idxmax()
-#         seed_vertices = mst_df.iloc[max_indices]["vertex"]
-
-#     # If multiple components, add distances between seed nodes
-#     if num_components > 1:
-
-#         # Extract edges and maximum edge length - as DF for cugraph
-#         # list of tuples for graph-tool
-        
-#         # With cugraph the MST is already calculated
-#         # so no extra edges can be retrieved from the graph
-#         G_df = graph.view_edge_list()
-#         max_weight = G_df["weights"].max()
-#         first_seed = seed_vertices.iloc[0]
-#         G_seed_link_df = cudf.DataFrame()
-#         G_seed_link_df["dst"] = seed_vertices.iloc[1:seed_vertices.size]
-#         G_seed_link_df["src"] = seed_vertices.iloc[0]
-#         G_seed_link_df["weights"] = seed_vertices.iloc[0]
-#         G_df = G_df.append(G_seed_link_df)
-
-#     # Construct graph
-#     mst_network = cugraph.Graph()
-#     G_df.rename(columns={"src": "source","dst": "destination"}, inplace=True)
-#     mst_network.from_cudf_edgelist(G_df, edge_attr="weights", renumber=False)
-
-#     sys.stderr.write("Completed calculation of minimum-spanning tree with CU.\n")
-
-#     return mst_network
-    return
-
 def generate_mst_network(graph, backend):
     unweighted_error_msg = RuntimeError("MST passed unweighted graph, weighted tree required.")
 
@@ -495,10 +431,11 @@ def generate_mst_network(graph, backend):
             mst_network = nx_generate_mst(graph) ##TODO
 
     elif backend == "CU":
-        if not graph.is_weighted():
-            raise unweighted_error_msg
-        else:
-            mst_network = cu_generate_mst(graph)
+        raise NotImplementedError("GPU graph not yet implemented")
+        # if not graph.is_weighted():
+        #     raise unweighted_error_msg
+        # else:
+        #     mst_network = cu_generate_mst(graph)
 
     return mst_network
 
@@ -681,15 +618,23 @@ def nx_save_graph_components(graph, out_prefix, outdir):
 ####   .METADATA    ####
 ########################
 def gt_get_graph_data(graph):
+    weighted = False
+    if "weight" in graph.edge_properties:
+        weighted = True
+
     edge_data = defaultdict(list)
     node_data = defaultdict(list)
-    edge_list = list(graph.ep["weight"].a)
+    if weighted:
+        edge_list = list(graph.ep["weight"].a)
 
     for idx, e in enumerate(graph.iter_edges()):
         source_node = graph.vp.id[e[0]]
         target_node = graph.vp.id[e[1]]
-        edge_weight = edge_list[idx]
-        edge_data[idx] = [source_node, target_node, edge_weight]
+        if weighted:
+            edge_weight = edge_list[idx]
+            edge_data[idx] = [source_node, target_node, edge_weight]
+        else:
+            edge_data[idx] = [source_node, target_node]
 
     for idx, v in enumerate(graph.iter_vertices()):
         node_id = graph.vp.id[v]
@@ -699,11 +644,19 @@ def gt_get_graph_data(graph):
     return edge_data, node_data
 
 def nx_get_graph_data(graph):
+    weighted = False
+    edge_attrs = list(graph.edges(data=True))[0][-1].keys()
+    if "weight" in edge_attrs:
+        weighted = True
     edge_data = defaultdict(list)
     node_data = defaultdict(list)
 
-    for idx, (s, t, w) in enumerate(graph.edges.data("weight")):
-        edge_data[idx] = [graph.nodes()[s]["id"], graph.nodes()[t]["id"], w]
+    if weighted:
+        for idx, (s, t, w) in enumerate(graph.edges.data("weight")):
+            edge_data[idx] = [graph.nodes()[s]["id"], graph.nodes()[t]["id"], w]
+    else:
+        for idx, (s, t) in enumerate(graph.edges(data=False)):
+            edge_data[idx] = [graph.nodes()[s]["id"], graph.nodes()[t]["id"]]
 
     for idx, (v, v_data) in enumerate(graph.nodes(data=True)):
         node_data[idx] = [v_data["id"], v_data["comp_membership"]]
