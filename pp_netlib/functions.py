@@ -285,7 +285,7 @@ def prepare_graph(graph, backend, labels = None):
 def save_graph(graph, backend, outdir, file_name, file_format):
     if backend == "GT":
         if file_format is None:
-            graph.save(os.path.join(outdir, file_name+".gt"))
+            graph.save(os.path.join(outdir, file_name+".graphml"))
         elif file_format is not None:
             if file_format not in [".gt", ".graphml"]:
                 raise NotImplementedError("Supported file formats to save a graph-tools graph are .gt or .graphml")

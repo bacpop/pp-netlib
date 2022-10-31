@@ -328,6 +328,8 @@ class Network:
 
                 write_cytoscape_csv(os.path.join(cytoscape_outdir, out_prefix+".csv"), clustering.keys(), clustering, external_data)
 
+    visualise = visualize
+
     def load_network(self, network_file):
         """Load a premade graph from a network file.
 
@@ -418,7 +420,14 @@ class Network:
         ## update vertex labels attribute
         self.vertex_labels += new_vertex_labels
 
-    def write_metadata(self, meta_outdir, out_prefix, external_data = None):
+    def write_metadata(self, out_prefix, meta_outdir = None, external_data = None):
+        """Write graph metadata to file.
+
+        Args:
+            meta_outdir (path/str): Directory to write outputs to. When not provided explicitly, defaults to self.outdir
+            out_prefix (str): Filename prefix to be applied to output files.
+            external_data (path/pd.DataFrame, optional): Additional data associated with graph samples/nodes, will be merged with data scraped from graph. Defaults to None.
+        """
         
         if meta_outdir is None:
             meta_outdir = self.outdir
@@ -447,8 +456,10 @@ class Network:
             node_data_df = pd.DataFrame.from_dict(self.sample_metadata, orient="index", columns=["sample_id", "sample_component"])
             if isinstance(external_data, str):
                 external_data_df = pd.read_csv(external_data, sep="\t", header=0)
+                external_data_df["sample_id"] = [sample.replace('.','_').replace(':','').replace('(','_').replace(')','_') for sample in external_data_df["sample_id"]]
                 sample_metadata = pd.merge(node_data_df, external_data_df, on="sample_id")
             elif isinstance(external_data, pd.DataFrame):
+                external_data_df["sample_id"] = [sample.replace('.','_').replace(':','').replace('(','_').replace(')','_') for sample in external_data_df["sample_id"]]
                 sample_metadata = pd.merge(node_data_df, external_data, on="sample_id")
 
             sample_metadata.to_csv(os.path.join(meta_outdir, out_prefix), sep="\t", index=False)
@@ -482,4 +493,3 @@ class Network:
             save_graph(graph=self.graph, backend=self.backend, outdir = self.outdir, file_name=file_name, file_format=file_format)
         if to_save == "ref_graph" or to_save == "both":
             save_graph(graph=self.ref_graph, backend=self.backend, outdir = self.outdir, file_name=file_name+".pruned", file_format=file_format)
-

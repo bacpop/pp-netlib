@@ -8,7 +8,7 @@ sample_2 = "tests/random_weighted.graphml"
 def test_prep_with_gt(graph_file):
     sample_gt_graph = Network([], outdir="tests/", backend = "GT")
     sample_gt_graph.load_network(graph_file)
-    sample_gt_graph.write_metadata("tests", "test_gt_summary")
+    sample_gt_graph.write_metadata(out_prefix = "test_gt_summary")
 
     expected_outfiles = ["tests/test_gt_summary_edge_data.tsv", "tests/test_gt_summary_node_data.tsv"]
 
@@ -26,7 +26,7 @@ def test_prep_with_gt(graph_file):
 def test_prep_with_nx(graph_file):
     sample_nx_graph = Network([], outdir="tests/", backend = "NX")
     sample_nx_graph.load_network(graph_file)
-    sample_nx_graph.write_metadata("tests", "test_nx_summary")
+    sample_nx_graph.write_metadata(meta_outdir="tests", out_prefix="test_nx_summary")
 
     expected_outfiles = ["tests/test_nx_summary_edge_data.tsv", "tests/test_nx_summary_node_data.tsv"]
 

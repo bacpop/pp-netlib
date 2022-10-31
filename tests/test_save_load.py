@@ -16,8 +16,8 @@ def __init__():
     for (s,d) in nx_graph.graph.edges():
         nx_edges.append((str(s), str(d)))
 
-    gt_graph.save("test_gt_graph", ".gt", "both")
-    nx_graph.save("test_nx_graph", ".graphml", "both")
+    gt_graph.save("test_gt_graph", ".gt")
+    nx_graph.save("test_nx_graph", ".graphml")
 
     return gt_graph, nx_graph, gt_edges, nx_edges
 
