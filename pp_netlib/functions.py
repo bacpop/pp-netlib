@@ -212,6 +212,7 @@ def prepare_graph(graph, backend, labels = None):
     """
 
     def prep_gt(gt_graph, labels):
+        import graph_tool.all as gt
         ## check that nodes have labels -- required
         if "id" not in gt_graph.vertex_properties:
             ## if no list of labels is provided, improvise node ids such that for node "i", id=str(i+1)
@@ -231,11 +232,27 @@ def prepare_graph(graph, backend, labels = None):
         ## check if comp_membership is assigned -- make this consistent with clustering by making sure that comp 1 is the largest. Here, calling get_gt_clusters
         if "comp_membership" not in gt_graph.vertex_properties:
             clustering = get_gt_clusters(gt_graph)
-            vprop = gt_graph.new_vp("int")
+            vprop = gt_graph.new_vp("string")
             gt_graph.vp.comp_membership = vprop
             for vertex in gt_graph.iter_vertices():
                 ## comp membership of vertex = the value corresponding to the id of that vertex in clustering
-                gt_graph.vp.comp_membership[vertex] = clustering[gt_graph.vp.id[vertex]]
+                gt_graph.vp.comp_membership[vertex] = str(clustering[gt_graph.vp.id[vertex]])
+
+        elif "comp_membership" in gt_graph.vertex_properties:
+            sys.stderr.write("Checking if node component memberships need updating...")
+            component_assignments, component_frequencies = gt.label_components(graph)
+            for component_index in range(len(component_frequencies)):
+                component_members = component_assignments.a == component_index
+                component = gt.GraphView(graph, vfilt = component_members)
+                component_vertices = component.get_vertices()
+                old_comp_memberships = list(set(graph.vp.comp_membership[v] for v in component_vertices))
+                if len(old_comp_memberships) > 1:
+                    sys.stderr.write("Updating...\n")
+                    new_comp = "_".join(str(i) for i in old_comp_memberships)
+                    for v in component_vertices:
+                        graph.vp.comp_membership[v] = new_comp
+                else:
+                    sys.stderr.write("Component memberships up to date.\n\n")
 
         ## check if edges have weights -- not required for most processes #TODO: is adding arbitrary weights a good idea? Weights are needed for graph viz.
         if "weight" not in gt_graph.edge_properties:
@@ -245,6 +262,7 @@ def prepare_graph(graph, backend, labels = None):
 
 
     def prep_nx(nx_graph, labels):
+        import networkx as nx
         node_attrs = list(nx_graph.nodes(data=True))[0][-1].keys() # get keys of attribute dictionary associated with the first node, ie node attributes
         edge_attrs = list(nx_graph.edges(data=True))[0][-1].keys() # get keys of attribute dictionary associated with the first edge, ie edge attributes
         ## check that nodes have labels -- required
@@ -264,6 +282,18 @@ def prepare_graph(graph, backend, labels = None):
             clustering = get_nx_clusters(nx_graph)
             for v in graph.nodes():
                 graph.nodes[v]["comp_membership"] = clustering[v]
+        ## check if comp_memberships are up to date
+        elif "comp_membership" in node_attrs:
+            sys.stderr.write("Checking if node component memberships need updating...")
+            for comp in sorted(nx.connected_components(graph), key=len, reverse=True):
+                old_comp_memberships = list(set(graph.nodes.data("comp_membership")[v] for v in comp))
+                if len(old_comp_memberships) > 1:
+                    sys.stderr.write("Updating...\n")
+                    new_comp = "_".join(str(i) for i in old_comp_memberships)
+                    for v in comp:
+                        graph.nodes[v]["comp_membership"] = new_comp
+                else:
+                    sys.stderr.write("Component memberships up to date.\n\n")
     
         ## check if edges have weights -- not required for most processes
         if "weight" not in edge_attrs:
