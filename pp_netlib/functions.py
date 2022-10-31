@@ -239,7 +239,7 @@ def prepare_graph(graph, backend, labels = None):
                 gt_graph.vp.comp_membership[vertex] = str(clustering[gt_graph.vp.id[vertex]])
 
         elif "comp_membership" in gt_graph.vertex_properties:
-            sys.stderr.write("Checking if node component memberships need updating...")
+            # sys.stderr.write("Checking if node component memberships need updating...")
             component_assignments, component_frequencies = gt.label_components(graph)
             for component_index in range(len(component_frequencies)):
                 component_members = component_assignments.a == component_index
@@ -251,8 +251,6 @@ def prepare_graph(graph, backend, labels = None):
                     new_comp = "_".join(str(i) for i in old_comp_memberships)
                     for v in component_vertices:
                         graph.vp.comp_membership[v] = new_comp
-                else:
-                    sys.stderr.write("Component memberships up to date.\n\n")
 
         ## check if edges have weights -- not required for most processes #TODO: is adding arbitrary weights a good idea? Weights are needed for graph viz.
         if "weight" not in gt_graph.edge_properties:
@@ -284,7 +282,7 @@ def prepare_graph(graph, backend, labels = None):
                 graph.nodes[v]["comp_membership"] = clustering[v]
         ## check if comp_memberships are up to date
         elif "comp_membership" in node_attrs:
-            sys.stderr.write("Checking if node component memberships need updating...")
+            # sys.stderr.write("Checking if node component memberships need updating...\n")
             for comp in sorted(nx.connected_components(graph), key=len, reverse=True):
                 old_comp_memberships = list(set(graph.nodes.data("comp_membership")[v] for v in comp))
                 if len(old_comp_memberships) > 1:
@@ -292,9 +290,7 @@ def prepare_graph(graph, backend, labels = None):
                     new_comp = "_".join(str(i) for i in old_comp_memberships)
                     for v in comp:
                         graph.nodes[v]["comp_membership"] = new_comp
-                else:
-                    sys.stderr.write("Component memberships up to date.\n\n")
-    
+
         ## check if edges have weights -- not required for most processes
         if "weight" not in edge_attrs:
             sys.stderr.write("Graph edges are not weighted.\n")

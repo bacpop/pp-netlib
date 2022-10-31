@@ -163,7 +163,7 @@ class Network:
         elif self.backend == "CU":
             raise NotImplementedError("GPU graph not yet implemented")
 
-        prepare_graph(self.graph, backend = self.backend, labels = self.vertex_labels) # call to prepare_graph to add component_membership and edge weight if required
+        prepare_graph(self.graph, backend = self.backend, labels = self.vertex_labels) # call to prepare_graph to add component_membership
 
     def prune(self, type_isolate = None, threads = 4):
         """Method to prune full graph and produce a reference graph
@@ -428,9 +428,12 @@ class Network:
             out_prefix (str): Filename prefix to be applied to output files.
             external_data (path/pd.DataFrame, optional): Additional data associated with graph samples/nodes, will be merged with data scraped from graph. Defaults to None.
         """
-        
+        from pp_netlib.functions import prepare_graph
+
         if meta_outdir is None:
             meta_outdir = self.outdir
+
+        self.graph = prepare_graph(self.graph, self.backend)
 
         if self.backend == "GT":
             from pp_netlib.functions import gt_get_graph_data
@@ -464,7 +467,7 @@ class Network:
 
             sample_metadata.to_csv(os.path.join(meta_outdir, out_prefix), sep="\t", index=False)
 
-    def save(self, file_name, file_format, to_save=None):
+    def save(self, file_name, file_format, to_save="both"):
         """Save graph to file.
 
         Args:
@@ -487,7 +490,7 @@ class Network:
             sys.stderr.write("Pruned graph not found, only saving full graph.\n")
             to_save = "full_graph"
 
-        save_graph(graph=self.graph, backend=self.backend, outdir = self.outdir, file_name=file_name, file_format=file_format)
+        # save_graph(graph=self.graph, backend=self.backend, outdir = self.outdir, file_name=file_name, file_format=file_format)
         
         if to_save == "full_graph" or to_save == "both":
             save_graph(graph=self.graph, backend=self.backend, outdir = self.outdir, file_name=file_name, file_format=file_format)
