@@ -370,6 +370,28 @@ class Network:
 
         prepare_graph(self.graph, backend = self.backend) # call to prepare_graph to add component_membership
 
+        ## get vertex labels from loaded graph and weights if any, and store as Network object attrs
+        if self.backend == "GT":
+            from pp_netlib.functions import gt_get_graph_data
+
+            edge_data, node_data = gt_get_graph_data(self.graph)
+            self.vertex_labels = [v[0] for k, v in node_data.items()]
+            if "weight" not in self.graph.edge_properties:
+                self.weights = None
+            else:
+                self.weights = [v[-1] for k, v in edge_data.items()]
+
+        if self.backend == "NX":
+            from pp_netlib.functions import nx_get_graph_data
+
+            edge_data, node_data = nx_get_graph_data(self.graph)
+            self.vertex_labels = [v[0] for k, v in node_data.items()]
+            edge_attrs = list(self.graph.edges(data=True))[0][-1].keys()
+            if "weight" not in edge_attrs:
+                self.weights = None
+            else:
+                self.weights = [v[-1] for k, v in edge_data.items()]
+
     def add_to_network(self, new_data_df, new_vertex_labels):
         """Add data to network
 
@@ -381,6 +403,7 @@ class Network:
         if self.graph is None:
             raise RuntimeError("No network found, cannot add data. Please load a network to update or construct a network with this data.\n\n")
 
+        new_vertex_labels = [new_label for new_label in new_vertex_labels if new_label not in self.vertex_labels]
         new_vertex_labels = [new_sample.replace('.','_').replace(':','').replace('(','_').replace(')','_') for new_sample in new_vertex_labels]
 
         if self.backend == "GT":

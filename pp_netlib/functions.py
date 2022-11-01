@@ -29,18 +29,24 @@ def construct_with_graphtool(network_data, vertex_labels, weights = None):
     ####    DF INPUT    ####
     ########################
     if isinstance(network_data, pd.DataFrame):
-        network_data.columns = ["source", "destination"]
+        # network_data.columns = ["source", "destination"]
 
         graph.add_vertex(len(vertex_labels)) ## add vertices
-
+        ## handle a case where edge_lists are in the form of (sample1, sample2), rather than (0,1)
+        vertex_map = {}
+        for idx, label in enumerate(vertex_labels):
+            vertex_map[label] = idx
+        sources = [vertex_map[label] for label in list(network_data.iloc[:, 0])]
+        targets = [vertex_map[label] for label in network_data.iloc[:, 1]]
         ## add weights column if weights provided as list (add error catching?)
         if weights is not None:
-            network_data["weights"] = weights
+            weights = network_data["weight"]
             eweight = graph.new_ep("float")
-            graph.add_edge_list(network_data.values, eprops = [eweight]) ## add weighted edges
+            graph.add_edge_list(list(zip(sources, targets, weights)), eprops = [eweight])
+            # graph.add_edge_list(list(network_data.itertuples(index=False, name=None)), eprops = [eweight]) ## add weighted edges
             graph.edge_properties["weight"] = eweight
         else:
-            graph.add_edge_list(network_data.values) ## add edges
+            graph.add_edge_list(list(zip(sources, targets))) ## add edges
 
     ##########################
     #### SPARSE MAT INPUT ####
@@ -99,16 +105,17 @@ def construct_with_networkx(network_data, vertex_labels, weights = None):
     ## initialise nx graph and add nodes
     graph = nx.Graph()
 
-    nodes_list = [(i, dict(id=vertex_labels[i])) for i in range(len(vertex_labels))]
+    ## handle a case where edge_lists are in the form of (sample1, sample2), rather than (0,1)
+    nodes_list = [(vertex_labels[i], dict(id=vertex_labels[i])) for i in range(len(vertex_labels))]
     graph.add_nodes_from(nodes_list)
 
     ########################
     ####    DF INPUT    ####
     ########################
     if isinstance(network_data, pd.DataFrame):
-        network_data.columns = ["source", "destination"]
+        # network_data.columns = ["source", "destination"]
         if weights is not None:
-            network_data["weights"] = weights
+            network_data["weight"] = weights
             graph.add_weighted_edges_from(network_data.values)
         else:
             graph.add_edges_from(network_data.values)
@@ -131,6 +138,8 @@ def construct_with_networkx(network_data, vertex_labels, weights = None):
         else:
             graph.add_edges_from(network_data)
 
+    ## reset node names back to integers
+    graph = nx.convert_node_labels_to_integers(graph, first_label=0)
     return graph
 
 ########################
