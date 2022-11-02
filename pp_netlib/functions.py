@@ -10,6 +10,17 @@ import pandas as pd
 import os, sys
 
 def get_edge_list(network_data, weights = None):
+    """Get an edge list from input data.
+
+    Args:
+        network_data (dataframe OR edge list OR sparse coordinate matrix): Data describing graph edges
+        weights (bool/list, optional): Whether edges are weighted. Defaults to None. If not None, it is expected to be a list of weights (floats).
+            If list, weights are expected to be in the same order as their corresponding edges in network data.
+
+    Returns:
+        vertex_map (dict): Dictionary of sample names taken from network_data; sample names are keys, their index in a sorted list of names is the value
+        edge_list (list of tuples): Edge list as (source, target) if unweighted data and (source, target, weight) if weighted data provided
+    """
     ########################
     ####    DF INPUT    ####
     ########################
@@ -78,8 +89,32 @@ def get_edge_list(network_data, weights = None):
     return vertex_map, edge_list
 
 def construct_graph(network_data, vertex_labels, backend, weights = None):
+    """Construct graph from edge list produced by get_edge_list
+
+    Args:
+        network_data (dataframe OR edge list OR sparse coordinate matrix): Data describing graph edges
+        vertex_labels (list): List of sample names
+        backend (str): Graphing module to use ("GT"/"NX")
+        weights (bool/list, optional): Whether edges are weighted. Defaults to None. If not None, it is expected to be a list of weights (floats).
+            If list, weights are expected to be in the same order as their corresponding edges in network data.
+
+    Returns:
+        graph (gt.Graph or nx.Graph): Graph populated with nodes, edges; nodes have attribute "id"
+
+        ***
+        NB: Note that vertex_labels are sorted before being passed to this function
+        
+        If edges in network_data are of type (0,1), (0,2)...: and vertex_labels = ["s1", "s2", "s3"];
+        Edge 1 is ("s1", "s2");, edge 2 is ("s1", "s3")
+        
+        If edges in network_data are of type ("s1", "s2"), ("s1", "s3")...: and vertex_labels = ["s1", "s2", "s3"];
+        Edge 1 and edge 2 are as above. 
+        ***
+    """
 
     vertex_map, edge_list = get_edge_list(network_data=network_data, weights=weights)
+
+    ## set weights to True is input data is a sparse matrix
     if isinstance(network_data, scipy.sparse.coo_matrix):
         weights = True
 
@@ -118,139 +153,6 @@ def construct_graph(network_data, vertex_labels, backend, weights = None):
     elif backend == "CU":
             raise NotImplementedError("GPU graph not yet implemented")
 
-    return graph
-
-def construct_with_graphtool(network_data, vertex_labels, weights = None):
-    """Construct a graph with graph-tool
-
-    Args:
-        network_data (dataframe OR edge list OR sparse coordinate matrix): Data containing record of edges in the graph.
-        vertex_labels (list): List of vertex/node labels to apply to graph vertices
-        weights (list, optional): List of weights associated with edges in network_data.
-                                      Weights must be in the same order as edges in network_data. Defaults to None.
-
-    Returns:
-        graph (gt.Graph): Graph-tool graph object populated with network data
-    """
-    import graph_tool.all as gt
-
-    graph = gt.Graph(directed = False) ## initialise graph_tool graph object
-
-    ########################
-    ####    DF INPUT    ####
-    ########################
-    if isinstance(network_data, pd.DataFrame):
-        # network_data.columns = ["source", "destination"]
-
-        graph.add_vertex(len(vertex_labels)) ## add vertices
-        ## handle a case where edge_lists are in the form of (sample1, sample2), rather than (0,1)
-        vertex_map = {}
-        for idx, label in enumerate(vertex_labels):
-            vertex_map[label] = idx
-        sources = [vertex_map[label] for label in list(network_data.iloc[:, 0])]
-        targets = [vertex_map[label] for label in network_data.iloc[:, 1]]
-        ## add weights column if weights provided as list (add error catching?)
-        if weights is not None:
-            weights = network_data["weight"]
-            eweight = graph.new_ep("float")
-            graph.add_edge_list(list(zip(sources, targets, weights)), eprops = [eweight])
-            # graph.add_edge_list(list(network_data.itertuples(index=False, name=None)), eprops = [eweight]) ## add weighted edges
-            graph.edge_properties["weight"] = eweight
-        else:
-            graph.add_edge_list(list(zip(sources, targets))) ## add edges
-
-    ##########################
-    #### SPARSE MAT INPUT ####
-    ##########################
-    elif isinstance(network_data, scipy.sparse.coo_matrix):
-        graph_data_df = pd.DataFrame()
-        graph_data_df["source"] = network_data.row
-        graph_data_df["destination"] =  network_data.col
-        graph_data_df["weights"] = network_data.data
-
-        graph.add_vertex(len(vertex_labels)) ## add vertices
-        eweight = graph.new_ep("float")
-        graph.add_edge_list(list(map(tuple, graph_data_df.values)), eprops = [eweight]) ## add weighted edges
-        graph.edge_properties["weight"] = eweight
-
-    ########################
-    ####   LIST INPUT   ####
-    ########################
-    elif isinstance(network_data, list):
-        graph.add_vertex(len(vertex_labels)) ## add vertices
-
-        if weights is not None:
-            weighted_edges = []
-
-            for i in range(len(network_data)):
-                weighted_edges.append(network_data[i] + (weights[i],))
-
-            eweight = graph.new_ep("float")
-            graph.add_edge_list(weighted_edges, eprops = [eweight]) ## add weighted edges
-            graph.edge_properties["weight"] = eweight
-
-        else:
-            graph.add_edge_list(network_data) ## add edges
-
-    v_name_prop = graph.new_vp("string")
-    graph.vertex_properties["id"] = v_name_prop
-    for i in range(len([v for v in graph.vertices()])):
-        v_name_prop[graph.vertex(i)] = vertex_labels[i]
-
-    return graph
-
-def construct_with_networkx(network_data, vertex_labels, weights = None):
-    """Construct a graph with networkx
-
-    Args:
-        network_data (dataframe OR edge list OR sparse coordinate matrix): Data containing record of edges in the graph.
-        vertex_labels (list): List of vertex/node labels to apply to graph vertices
-        weights (list, optional): List of weights associated with edges in network_data.
-                                      Weights must be in the same order as edges in network_data. Defaults to None.
-
-    Returns:
-        graph (nx.Graph): Graph-tool graph object populated with network data
-    """
-    import networkx as nx
-    
-    ## initialise nx graph and add nodes
-    graph = nx.Graph()
-
-    ## handle a case where edge_lists are in the form of (sample1, sample2), rather than (0,1)
-    nodes_list = [(vertex_labels[i], dict(id=vertex_labels[i])) for i in range(len(vertex_labels))]
-    graph.add_nodes_from(nodes_list)
-
-    ########################
-    ####    DF INPUT    ####
-    ########################
-    if isinstance(network_data, pd.DataFrame):
-        # network_data.columns = ["source", "destination"]
-        if weights is not None:
-            network_data["weight"] = weights
-            graph.add_weighted_edges_from(network_data.values)
-        else:
-            graph.add_edges_from(network_data.values)
-
-    ##########################
-    #### SPARSE MAT INPUT ####
-    ##########################
-    elif isinstance(network_data, scipy.sparse.coo_matrix):
-        weighted_edges = list(zip(list(network_data.row), list(network_data.col), list(network_data.data)))
-        graph.add_weighted_edges_from(weighted_edges)
-
-    ########################
-    ####   LIST INPUT   ####
-    ########################
-    elif isinstance(network_data, list):
-        if weights is not None:
-            src, dest = zip(*network_data)
-            weighted_edges = list(zip(src, dest, weights))
-            graph.add_weighted_edges_from(weighted_edges)
-        else:
-            graph.add_edges_from(network_data)
-
-    ## reset node names back to integers
-    graph = nx.convert_node_labels_to_integers(graph, first_label=0)
     return graph
 
 ########################
@@ -319,7 +221,7 @@ def summarise(graph, backend):
 ########################
 ####      .SAVE     ####
 ########################
-def prepare_graph(graph, backend, labels = None):
+def prepare_graph(graph, backend, labels = None, clustering = None):
     """Prepare a graph, by checking whether the graph nodes have id and component membership/clusteing attributes, and graph edges have weights.
         If "id" attribute missing, labels are applied as "id"; if labels not provided, "id" is set as "node_(node)"
         If "comp_membership" attribute missing, clusters are calculated and stored as node attributes
@@ -331,7 +233,7 @@ def prepare_graph(graph, backend, labels = None):
         backend (str): Whether the graph passed to the function is from "GT" or "NX" 
     """
 
-    def prep_gt(gt_graph, labels):
+    def prep_gt(gt_graph, labels, clustering):
         import graph_tool.all as gt
         ## check that nodes have labels -- required
         if "id" not in gt_graph.vertex_properties:
@@ -351,7 +253,9 @@ def prepare_graph(graph, backend, labels = None):
 
         ## check if comp_membership is assigned -- make this consistent with clustering by making sure that comp 1 is the largest. Here, calling get_gt_clusters
         if "comp_membership" not in gt_graph.vertex_properties:
-            clustering = get_gt_clusters(gt_graph)
+            if clustering is None: ## if previous clustering not give, calculate clustering -- used primarily for load_network
+                clustering = get_gt_clusters(gt_graph)
+
             vprop = gt_graph.new_vp("string")
             gt_graph.vp.comp_membership = vprop
             for vertex in gt_graph.iter_vertices():
@@ -379,7 +283,7 @@ def prepare_graph(graph, backend, labels = None):
         return gt_graph
 
 
-    def prep_nx(nx_graph, labels):
+    def prep_nx(nx_graph, labels, clustering):
         import networkx as nx
         node_attrs = list(nx_graph.nodes(data=True))[0][-1].keys() # get keys of attribute dictionary associated with the first node, ie node attributes
         edge_attrs = list(nx_graph.edges(data=True))[0][-1].keys() # get keys of attribute dictionary associated with the first edge, ie edge attributes
@@ -397,7 +301,9 @@ def prepare_graph(graph, backend, labels = None):
 
         ## check if comp_membership is assigned -- could make things easier?
         if "comp_membership" not in node_attrs:
-            clustering = get_nx_clusters(nx_graph)
+            if clustering is None: ## if previous clustering not give, calculate clustering -- used primarily for load_network
+                clustering = get_nx_clusters(nx_graph)
+
             for v in graph.nodes():
                 graph.nodes[v]["comp_membership"] = clustering[v]
         ## check if comp_memberships are up to date
@@ -422,9 +328,9 @@ def prepare_graph(graph, backend, labels = None):
 
     else:
         if backend == "GT":
-            graph = prep_gt(graph, labels)
+            graph = prep_gt(graph, labels, clustering)
         elif backend == "NX":
-            graph = prep_nx(graph, labels)
+            graph = prep_nx(graph, labels, clustering)
 
     return graph
 

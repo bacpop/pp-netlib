@@ -4,7 +4,7 @@ import os, sys
 import pandas as pd
 
 
-from pp_netlib.functions import construct_graph, construct_with_graphtool, construct_with_networkx, get_edge_list, prepare_graph, summarise, save_graph
+from pp_netlib.functions import construct_graph, prepare_graph, summarise, save_graph
 
 class Network:
     def __init__(self, ref_list, outdir = "./", backend = None):
@@ -152,13 +152,13 @@ class Network:
 
         ## clean up problem characters in sample names, store as vertex_labels attribute
         vertex_labels = [sample.replace('.','_').replace(':','').replace('(','_').replace(')','_') for sample in self.ref_list]
-        self.vertex_labels = vertex_labels
+        self.vertex_labels = sorted(vertex_labels)
 
         ## create a graph
         self.graph = construct_graph(network_data=network_data, vertex_labels=self.vertex_labels, backend=self.backend, weights=weights)
 
         prepare_graph(self.graph, backend = self.backend, labels = self.vertex_labels) # call to prepare_graph to add component_membership
-        
+
         if weights is not None:
             if self.backend == "GT":
                 from pp_netlib.functions import gt_get_graph_data
@@ -335,9 +335,9 @@ class Network:
 
                 write_cytoscape_csv(os.path.join(cytoscape_outdir, out_prefix+".csv"), clustering.keys(), clustering, external_data)
 
-    visualise = visualize
+    visualise = visualize ## alias for visalize method
 
-    def load_network(self, network_file):
+    def load_network(self, network_file, sample_metadata_csv = None):
         """Load a premade graph from a network file.
 
         Args:
@@ -348,6 +348,19 @@ class Network:
         
         # Load the network from the specified file
         file_name, file_extension = os.path.splitext(network_file)
+
+        if sample_metadata_csv is not None:
+            sample_metadata = pd.read_csv(sample_metadata_csv, sep = ",", header = 0)
+            if "Taxon" in sample_metadata.columns:
+                labels_to_apply = sample_metadata["Taxon"]
+            else:
+                labels_to_apply = sample_metadata["sample_id"]
+
+            clusters_to_apply = sample_metadata["Cluster"]
+            clustering = {}
+            for vertex, cluster in list(zip(labels_to_apply, clusters_to_apply)):
+                clustering[vertex] = cluster
+        
 
         if file_extension == ".gt":
             self.graph = self.gt.load_graph(network_file)
@@ -375,7 +388,10 @@ class Network:
         else:
             raise RuntimeError("File format not recognised.\n\n")
 
-        prepare_graph(self.graph, backend = self.backend) # call to prepare_graph to add component_membership
+        if sample_metadata_csv is not None:
+            prepare_graph(self.graph, backend = self.backend, labels = labels_to_apply, clustering = clustering) # prepare graph based on given metadata
+        else:
+            prepare_graph(self.graph, backend = self.backend) # prepare graph de novo
 
         ## get vertex labels from loaded graph and weights if any, and store as Network object attrs
         if self.backend == "GT":
