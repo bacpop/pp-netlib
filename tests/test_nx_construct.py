@@ -13,10 +13,9 @@ def __init__():
     sample_edge_list = [(0, 1), (1, 2), (2, 3), (3, 4), (4, 0)]
 
     ## setting up test dataframe
-    sample_df_data = {0: [0, 1, 2, 3, 4], 1: [1, 2, 3, 4, 0]}
+    sample_df_data = {"source": [0, 1, 2, 3, 4], "target": [1, 2, 3, 4, 0]}
     sample_df = pd.DataFrame(sample_df_data)
-    print(sample_df)
-
+    
     ## setting up test coo_matrix
     sample_row = np.array([0, 1, 2, 3, 4])
     sample_column = np.array([1, 2, 3, 4, 0])
@@ -68,8 +67,6 @@ def nx_test_from_df(data_df, graph, weighted_graph, network, weighted_network, w
     w_test_nodes = list(weighted_network.graph.nodes.data("id"))
 
     try:
-        print(nodes)
-        print(test_nodes)
         assert edges == test_edges
         assert weighted_edges == weighted_test_edges
         assert nodes == test_nodes

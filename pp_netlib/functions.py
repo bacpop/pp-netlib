@@ -9,6 +9,117 @@ import numpy as np
 import pandas as pd
 import os, sys
 
+def get_edge_list(network_data, weights = None):
+    ########################
+    ####    DF INPUT    ####
+    ########################
+    if isinstance(network_data, pd.DataFrame):
+        vertices = set(network_data["source"]).union(set(network_data["target"]))
+        vertex_map = {}
+        for idx, vertex in enumerate(sorted(vertices)):
+            vertex_map[vertex] = idx
+
+        sources = [vertex_map[vertex] for vertex in network_data["source"]]
+        targets = [vertex_map[vertex] for vertex in network_data["target"]]
+        
+        ## add weights column if weights provided as list (add error catching?)
+        if weights is not None:
+            if isinstance(weights, list):
+                edge_list = list(zip(sources, targets, weights))
+            else:
+                try:
+                    weights = network_data["weight"]
+                    edge_list = list(zip(sources, targets, weights))
+                except KeyError as ke:
+                    raise ke("No weights provided either in the input df or as a list.")
+    
+        else:
+            edge_list = list(zip(sources, targets))
+
+    ##########################
+    #### SPARSE MAT INPUT ####
+    ##########################
+    elif isinstance(network_data, scipy.sparse.coo_matrix):
+        sources = list(network_data.row)
+        targets = list(network_data.col)
+        weights = list(network_data.data)
+
+        edge_list = list(zip(sources, targets, weights))
+        vertices = set(sources).union(set(targets))
+        vertex_map = {}
+        for idx, vertex in enumerate(sorted(vertices)):
+            vertex_map[vertex] = idx
+
+    ########################
+    ####   LIST INPUT   ####
+    ########################
+    elif isinstance(network_data, list):
+
+        if weights is not None:
+            try:
+                sources, targets, weights = zip(*network_data)
+                edge_list = network_data
+            except ValueError as ve:
+                if isinstance(weights, list):
+                    sources, targets = zip(*network_data)
+                    edge_list = list(zip(sources, targets, weights))
+                else:
+                    raise ve("No weights provided either in the input edge list or as a list.")
+
+        else:
+            sources, targets = zip(*network_data)
+            edge_list = network_data
+
+        vertices = set(sources).union(set(targets))
+        vertex_map = {}
+        for idx, vertex in enumerate(sorted(vertices)):
+            vertex_map[vertex] = idx
+
+    return vertex_map, edge_list
+
+def construct_graph(network_data, vertex_labels, backend, weights = None):
+
+    vertex_map, edge_list = get_edge_list(network_data=network_data, weights=weights)
+    if isinstance(network_data, scipy.sparse.coo_matrix):
+        weights = True
+
+    if backend == "GT":
+        import graph_tool.all as gt
+
+        graph = gt.Graph(directed = False) ## initialise graph_tool graph object
+        if weights is not None:
+            eweight = graph.new_ep("float")
+            graph.add_edge_list(edge_list, eprops = [eweight])
+            graph.edge_properties["weight"] = eweight
+        else:
+            graph.add_edge_list(edge_list)
+
+        v_name_prop = graph.new_vp("string")
+        graph.vertex_properties["id"] = v_name_prop
+        for idx in vertex_map.values():
+            v_name_prop[idx] = vertex_labels[idx]
+
+    elif backend == "NX":
+        import networkx as nx
+    
+        ## initialise nx graph and add nodes
+        graph = nx.Graph()
+        nodes_list = [(i, dict(id=vertex_labels[i])) for i in range(len(vertex_labels))]
+        graph.add_nodes_from(nodes_list)
+
+        if weights is not None:
+            graph.add_weighted_edges_from(edge_list)
+        else:
+            graph.add_edges_from(edge_list)
+
+        for idx in vertex_map.values():
+            graph.nodes[idx]["id"] = vertex_labels[idx]
+    
+    elif backend == "CU":
+            raise NotImplementedError("GPU graph not yet implemented")
+
+    return graph
+
 def construct_with_graphtool(network_data, vertex_labels, weights = None):
     """Construct a graph with graph-tool
 

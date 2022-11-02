@@ -4,7 +4,7 @@ import os, sys
 import pandas as pd
 
 
-from pp_netlib.functions import construct_with_graphtool, construct_with_networkx, prepare_graph, summarise, save_graph
+from pp_netlib.functions import construct_graph, construct_with_graphtool, construct_with_networkx, get_edge_list, prepare_graph, summarise, save_graph
 
 class Network:
     def __init__(self, ref_list, outdir = "./", backend = None):
@@ -153,17 +153,23 @@ class Network:
         ## clean up problem characters in sample names, store as vertex_labels attribute
         vertex_labels = [sample.replace('.','_').replace(':','').replace('(','_').replace(')','_') for sample in self.ref_list]
         self.vertex_labels = vertex_labels
-        self.weights = weights
 
-        ## initialise a graph object
-        if self.backend == "GT":
-            self.graph = construct_with_graphtool(network_data=network_data, vertex_labels=self.vertex_labels, weights=weights)
-        elif self.backend == "NX":
-            self.graph = construct_with_networkx(network_data=network_data, vertex_labels=self.vertex_labels, weights=weights)
-        elif self.backend == "CU":
-            raise NotImplementedError("GPU graph not yet implemented")
+        ## create a graph
+        self.graph = construct_graph(network_data=network_data, vertex_labels=self.vertex_labels, backend=self.backend, weights=weights)
 
         prepare_graph(self.graph, backend = self.backend, labels = self.vertex_labels) # call to prepare_graph to add component_membership
+        
+        if weights is not None:
+            if self.backend == "GT":
+                from pp_netlib.functions import gt_get_graph_data
+                edge_data, node_data = gt_get_graph_data(self.graph)
+                self.weights = [v[-1] for k, v in edge_data.items()]
+            elif self.backend == "NX":
+                from pp_netlib.functions import nx_get_graph_data
+                edge_data, node_data = nx_get_graph_data(self.graph)
+                self.weights = [v[-1] for k, v in edge_data.items()]
+        else:
+            self.weights = None
 
     def prune(self, type_isolate = None, threads = 4):
         """Method to prune full graph and produce a reference graph
@@ -216,8 +222,9 @@ class Network:
             updated_refs = nx_get_connected_refs(self.graph, reference_vertices)
 
             ## add type_isolate to pruned list of samples
-            type_idx = [i[0] for i in list(self.graph.nodes(data="id")) if i[1] == type_isolate]
-            updated_refs.add(type_idx[0])
+            if type_isolate is not None:
+                type_idx = [i[0] for i in list(self.graph.nodes(data="id")) if i[1] == type_isolate]
+                updated_refs.add(type_idx[0])
 
             ## create pruned ref graph
             self.ref_graph = self.graph.copy()
