@@ -349,19 +349,6 @@ class Network:
         # Load the network from the specified file
         file_name, file_extension = os.path.splitext(network_file)
 
-        if sample_metadata_csv is not None:
-            sample_metadata = pd.read_csv(sample_metadata_csv, sep = ",", header = 0)
-            if "Taxon" in sample_metadata.columns:
-                labels_to_apply = sample_metadata["Taxon"]
-            else:
-                labels_to_apply = sample_metadata["sample_id"]
-
-            clusters_to_apply = sample_metadata["Cluster"]
-            clustering = {}
-            for vertex, cluster in list(zip(labels_to_apply, clusters_to_apply)):
-                clustering[vertex] = cluster
-        
-
         if file_extension == ".gt":
             self.graph = self.gt.load_graph(network_file)
             num_nodes = len(list(self.graph.vertices()))
@@ -389,7 +376,19 @@ class Network:
             raise RuntimeError("File format not recognised.\n\n")
 
         if sample_metadata_csv is not None:
+            sample_metadata = pd.read_csv(sample_metadata_csv, sep = ",", header = 0)
+            if "Taxon" in sample_metadata.columns:
+                labels_to_apply = sample_metadata["Taxon"]
+            else:
+                labels_to_apply = sample_metadata["sample_id"]
+
+            clusters_to_apply = sample_metadata["Cluster"]
+            clustering = {}
+            for vertex, cluster in list(zip(labels_to_apply, clusters_to_apply)):
+                clustering[vertex] = cluster
+
             prepare_graph(self.graph, backend = self.backend, labels = labels_to_apply, clustering = clustering) # prepare graph based on given metadata
+            
         else:
             prepare_graph(self.graph, backend = self.backend) # prepare graph de novo
 
@@ -414,6 +413,11 @@ class Network:
                 self.weights = None
             else:
                 self.weights = [v[-1] for k, v in edge_data.items()]
+
+        ## populate self.vertex_map, useful for when adding to loaded graph
+        self.vertex_map = {}
+        for idx, vertex in enumerate(sorted(self.vertex_labels)):
+            self.vertex_map[vertex] = idx
 
     def add_to_network(self, new_data_df, new_vertex_labels):
         """Add data to network
@@ -488,6 +492,8 @@ class Network:
         ## update vertex labels attribute; also update vertex map attribute for multiple calls to add_to_network
         self.vertex_labels += new_vertex_labels
         self.vertex_map.update(new_vertex_map)
+
+        prepare_graph(self.graph, self.backend)
 
     def write_metadata(self, out_prefix, meta_outdir = None, external_data = None):
         """Write graph metadata to file.
