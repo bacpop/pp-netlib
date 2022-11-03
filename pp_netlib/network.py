@@ -369,11 +369,13 @@ class Network:
                 self.graph = self.nx.read_graphml(network_file)
                 num_nodes = len(self.graph.nodes())
                 num_edges = len(self.graph.edges())
+                self.nx.convert_node_labels_to_integers(self.graph, first_label=0)
         
             sys.stderr.write(f"Loaded network with {num_nodes} nodes and {num_edges} edges with {self.backend}.\n\n") 
 
         else:
             raise RuntimeError("File format not recognised.\n\n")
+
 
         if sample_metadata_csv is not None:
             sample_metadata = pd.read_csv(sample_metadata_csv, sep = ",", header = 0)
