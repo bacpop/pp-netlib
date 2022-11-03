@@ -4,7 +4,7 @@ import os, sys
 import pandas as pd
 
 
-from pp_netlib.functions import construct_graph, prepare_graph, summarise, save_graph
+from pp_netlib.functions import construct_graph, get_edge_list, prepare_graph, summarise, save_graph
 
 class Network:
     def __init__(self, ref_list, outdir = "./", backend = None):
@@ -155,7 +155,7 @@ class Network:
         self.vertex_labels = sorted(vertex_labels)
 
         ## create a graph
-        self.graph = construct_graph(network_data=network_data, vertex_labels=self.vertex_labels, backend=self.backend, weights=weights)
+        self.graph, self.vertex_map = construct_graph(network_data=network_data, vertex_labels=self.vertex_labels, backend=self.backend, weights=weights)
 
         prepare_graph(self.graph, backend = self.backend, labels = self.vertex_labels) # call to prepare_graph to add component_membership
 
@@ -427,44 +427,67 @@ class Network:
             raise RuntimeError("No network found, cannot add data. Please load a network to update or construct a network with this data.\n\n")
 
         new_vertex_labels = [new_label for new_label in new_vertex_labels if new_label not in self.vertex_labels]
-        new_vertex_labels = [new_sample.replace('.','_').replace(':','').replace('(','_').replace(')','_') for new_sample in new_vertex_labels]
+        new_vertex_labels = sorted([new_sample.replace('.','_').replace(':','').replace('(','_').replace(')','_') for new_sample in new_vertex_labels])
+
+        orig_verts = self.vertex_map.keys()
+
+        sources = list(new_data_df["source"])
+        targets = list(new_data_df["target"])
+        new_data_verts = set(sources).union(set(targets))
+
+        new_vertex_map = {}
+        index_offset = 0
+        for vert in new_data_verts:
+            if vert in orig_verts:
+                new_vertex_map[vert] = self.vertex_map[vert]
+            else:
+                new_vertex_map[vert] = len(orig_verts)+index_offset
+                index_offset += 1
+
+        source_idx = [new_vertex_map[i] for i in sources]
+        target_idx = [new_vertex_map[i] for i in targets]
+
+        if self.weights is not None:
+            if "weights" not in new_data_df.columns:
+                weights = [0.0]*len(new_data_df)
+            else:
+                weights = new_data_df["weights"]
+
+            new_edge_list = list(zip(source_idx, target_idx, weights))
+
+        else:
+            new_edge_list = list(zip(source_idx, target_idx))
 
         if self.backend == "GT":
             self.graph.add_vertex(len(new_vertex_labels)) ## add new vertices
 
             if self.weights is not None:
-                if "weights" not in new_data_df.columns: ## if existing graph has edge weights, but new data does not
-                    new_data_df["weights"] = 0.0 ## add a dummy column
-                ## update graph
+                # update graph with weighted edges
                 eweight = self.graph.ep["weight"]
-                self.graph.add_edge_list(new_data_df.values, eprops = [eweight])
-            
-            elif self.weights is None: 
-                if "weights" in new_data_df.columns: ## if existing graph does not have edge weights, but new data does
-                    new_data_df.drop(columns=["weights"]) ## remove the weights column
-                ## update graph
-                self.graph.add_edge_list(new_data_df.values)
+                self.graph.add_edge_list(new_edge_list, eprops = [eweight])
+            else:
+                # update graph with unweighted edges
+                self.graph.add_edge_list(new_edge_list)
 
-            ## add vertex labels to new data
-            for idx, vertex_label in enumerate(new_vertex_labels):
-                self.graph.vp.id[idx + len(self.vertex_labels)] = vertex_label
+            ## add labels to new nodes
+            for idx, label in enumerate(new_vertex_labels):
+                self.graph.vp.id[idx + len(self.vertex_labels)] = label
 
         if self.backend == "NX":
+            ## add new nodes with an "id" attribute
             new_nodes_list = [(i+len(self.vertex_labels), dict(id=new_vertex_labels[i])) for i in range(len(new_vertex_labels))]
-            self.graph.add_nodes_from(new_nodes_list) ## add new nodes
+            self.graph.add_nodes_from(new_nodes_list)
 
             if self.weights is not None:
-                if "weights" not in new_data_df.columns: ## if existing graph has edge weights, but new data does not
-                    new_data_df["weights"] = 0.0 ## add a dummy column
-                self.graph.add_weighted_edges_from(new_data_df.values)
+                # update graph with weighted edges
+                self.graph.add_weighted_edges_from(new_edge_list)
+            else:
+                # update graph with unweighted edges
+                self.graph.add_edges_from(new_edge_list)
 
-            elif self.weights is None:
-                if "weights" in new_data_df.columns: ## if existing graph does not have edge weights, but new data does
-                    new_data_df.drop(columns=["weights"]) ## remove the weights column
-                self.graph.add_edges_from(new_data_df.values)
-
-        ## update vertex labels attribute
+        ## update vertex labels attribute; also update vertex map attribute for multiple calls to add_to_network
         self.vertex_labels += new_vertex_labels
+        self.vertex_map.update(new_vertex_map)
 
     def write_metadata(self, out_prefix, meta_outdir = None, external_data = None):
         """Write graph metadata to file.

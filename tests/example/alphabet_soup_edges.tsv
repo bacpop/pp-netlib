@@ -1,4 +1,4 @@
-source	target	weight
+source	target	weights
 ab	ae	0.33910324297894545
 ab	cg	0.9899600996246886
 ab	da	0.2353646896027653

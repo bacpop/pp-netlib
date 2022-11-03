@@ -39,10 +39,10 @@ def get_edge_list(network_data, weights = None):
                 edge_list = list(zip(sources, targets, weights))
             else:
                 try:
-                    weights = network_data["weight"]
+                    weights = network_data["weights"]
                     edge_list = list(zip(sources, targets, weights))
                 except KeyError as ke:
-                    raise ke("No weights provided either in the input df or as a list.")
+                    raise ke
     
         else:
             edge_list = list(zip(sources, targets))
@@ -55,37 +55,56 @@ def get_edge_list(network_data, weights = None):
         targets = list(network_data.col)
         weights = list(network_data.data)
 
-        edge_list = list(zip(sources, targets, weights))
         vertices = set(sources).union(set(targets))
         vertex_map = {}
         for idx, vertex in enumerate(sorted(vertices)):
             vertex_map[vertex] = idx
+        source_idx = [vertex_map[vertex] for vertex in sources]
+        target_idx = [vertex_map[vertex] for vertex in targets]
+
+        edge_list = list(zip(source_idx, target_idx, weights))
+        
 
     ########################
     ####   LIST INPUT   ####
     ########################
     elif isinstance(network_data, list):
 
-        if weights is not None:
+        if weights is None:
+            sources, targets = zip(*network_data)
+            vertices = set(sources).union(set(targets))
+            vertex_map = {}
+            for idx, vertex in enumerate(sorted(vertices)):
+                vertex_map[vertex] = idx
+            source_idx = [vertex_map[vertex] for vertex in sources]
+            target_idx = [vertex_map[vertex] for vertex in targets]
+            edge_list = list(zip(source_idx, target_idx))
+
+        else:
             try:
                 sources, targets, weights = zip(*network_data)
-                edge_list = network_data
+                vertices = set(sources).union(set(targets))
+                vertex_map = {}
+                for idx, vertex in enumerate(sorted(vertices)):
+                    vertex_map[vertex] = idx
+                source_idx = [vertex_map[vertex] for vertex in sources]
+                target_idx = [vertex_map[vertex] for vertex in targets]
+
+                edge_list = list(zip(source_idx, target_idx, weights))
             except ValueError as ve:
                 if isinstance(weights, list):
                     sources, targets = zip(*network_data)
-                    edge_list = list(zip(sources, targets, weights))
+                    vertices = set(sources).union(set(targets))
+                    vertex_map = {}
+                    for idx, vertex in enumerate(sorted(vertices)):
+                        vertex_map[vertex] = idx
+                    source_idx = [vertex_map[vertex] for vertex in sources]
+                    target_idx = [vertex_map[vertex] for vertex in targets]
+
+                    edge_list = list(zip(source_idx, target_idx, weights))
                 else:
-                    raise ve("No weights provided either in the input edge list or as a list.")
-
-        else:
-            sources, targets = zip(*network_data)
-            edge_list = network_data
-
-        vertices = set(sources).union(set(targets))
-        vertex_map = {}
-        for idx, vertex in enumerate(sorted(vertices)):
-            vertex_map[vertex] = idx
-
+                    raise ve
+        
     return vertex_map, edge_list
 
 def construct_graph(network_data, vertex_labels, backend, weights = None):
@@ -147,13 +166,13 @@ def construct_graph(network_data, vertex_labels, backend, weights = None):
         else:
             graph.add_edges_from(edge_list)
 
-        for idx in vertex_map.values():
-            graph.nodes[idx]["id"] = vertex_labels[idx]
+        # for idx in vertex_map.values():
+        #     graph.nodes[idx]["id"] = vertex_labels[idx]
     
     elif backend == "CU":
             raise NotImplementedError("GPU graph not yet implemented")
 
-    return graph
+    return graph, vertex_map
 
 ########################
 ####   .SUMMARISE   ####
