@@ -288,7 +288,9 @@ def prepare_graph(graph, backend, labels = None, clustering = None):
                 component_members = component_assignments.a == component_index
                 component = gt.GraphView(graph, vfilt = component_members)
                 component_vertices = component.get_vertices()
-                old_comp_memberships = list(set(graph.vp.comp_membership[v] for v in component_vertices))
+                old_comp_memberships = sorted(list(set(graph.vp.comp_membership[v] for v in component_vertices)))
+                if "" in old_comp_memberships:
+                    old_comp_memberships.remove("")
                 if len(old_comp_memberships) > 1:
                     sys.stderr.write("Updating...\n")
                     new_comp = "_".join(str(i) for i in old_comp_memberships)
@@ -332,7 +334,7 @@ def prepare_graph(graph, backend, labels = None, clustering = None):
                 old_comp_memberships = list(set(graph.nodes.data("comp_membership")[v] for v in comp))
                 if len(old_comp_memberships) > 1:
                     sys.stderr.write("Updating...\n")
-                    new_comp = "_".join(str(i) for i in old_comp_memberships)
+                    new_comp = "_".join(str(i) for i in old_comp_memberships).replace("_None", "")
                     for v in comp:
                         graph.nodes[v]["comp_membership"] = new_comp
 
