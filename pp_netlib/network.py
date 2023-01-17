@@ -536,14 +536,14 @@ class Network:
         else:
             node_data_df = pd.DataFrame.from_dict(self.sample_metadata, orient="index", columns=["sample_id", "sample_component"])
             if isinstance(external_data, str):
-                external_data_df = pd.read_csv(external_data, header=0)
+                external_data_df = pd.read_csv(external_data, sep = "\t", header=0)
                 external_data_df["sample_id"] = [sample.replace('.','_').replace(':','').replace('(','_').replace(')','_') for sample in external_data_df["sample_id"]]
-                sample_metadata = pd.merge(node_data_df, external_data_df, on="sample_id")
+                self.sample_metadata = pd.merge(node_data_df, external_data_df, on="sample_id")
             elif isinstance(external_data, pd.DataFrame):
-                external_data_df["sample_id"] = [sample.replace('.','_').replace(':','').replace('(','_').replace(')','_') for sample in external_data_df["sample_id"]]
-                sample_metadata = pd.merge(node_data_df, external_data, on="sample_id")
+                external_data["sample_id"] = [sample.replace('.','_').replace(':','').replace('(','_').replace(')','_') for sample in external_data["sample_id"]]
+                self.sample_metadata = pd.merge(node_data_df, external_data, on="sample_id")
 
-            sample_metadata.to_csv(os.path.join(meta_outdir, out_prefix+"_node_data.tsv"), sep="\t", index=False)
+            self.sample_metadata.to_csv(os.path.join(meta_outdir, out_prefix+"_node_data.tsv"), sep="\t", index=False)
 
     def save(self, file_name, file_format, to_save="both"):
         """Save graph to file.

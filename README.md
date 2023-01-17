@@ -1,5 +1,24 @@
 # Network utilities for PopPUNK  
-{{< toc >}}
+
+    1. [Install](#install)
+    2. [Quick Start](#quick-start)
+    3. [A Brief Overview of PopPUNK](#a-brief-overview-of-poppunk)
+    4. [Notes](#notes)
+        - [prepare_graph](#prepare_graph)
+        - [How Node Identities Are Tracked](#how-node-identities-are-tracked)
+        - [Pruning](#pruning)
+        - [Network Attributes](#network-attributes)
+    3. [List of Options and Default Behaviours](#list-of-options-and-default-behaviours)
+        - [Initialise](#initialising)
+        - [Construct](#construct)
+        - [Load](#load)
+        - [Visualise](#visualise)
+        - [Prune](#prune)
+        - [Add to Network](#add-to-network)
+        - [Summarise](#summarise)
+        - [Save](#save)
+        - [Write Metadata](#write-metadata)
+
 ## Install  
 
 ```
@@ -7,6 +26,8 @@ $ git clone https://github.com/bacpop/pp-netlib.git
 $ cd pp-netlib
 $ python setup.py install
 ```  
+
+You can check that things are working as they should by running `bash tests/run_tests.sh`.
 
 ## Quick Start  
 
@@ -69,6 +90,76 @@ example_graph.save(file_name="example_graph", file_format=".graphml", to_save="b
 ## write node labels, clusters, and metadata to some_prefix_node_data.tsv, edge data to some_prefix_edge_data.tsv
 example_graph.write_metadata(out_prefix = "some_prefix")
 ```
+---
+
+## A Brief Overview of PopPUNK  
+
+[PopPUNK](https://poppunk.readthedocs.io/en/latest/) is a tool for **pop**ulation **p**artitioning **u**sing **n**ucleotide **k**mers. More specifically, it first generates variable-length kmers from a set of input genome assemblies. Then, it creates kmer-sketches -- subsets of the ordered kmer set for each assembly -- which it uses to calculate pairwise distances between all the input assemblies (this is the database-creation step). It then applies a user-specified statistical model to these all-vs-all pairwise distances to yeild clusters, each of which represents a strain in the population.  
+
+### Networks in PopPUNK  
+
+Networks are useful representations of these pairwise distances. In the context of PopPUNK, each node in a network represents an assembly. In the initial all-vs-all pairwise state, every node in the PopPUNK network is connected to every other node via edges that are weighted with the corresponding pairwise distance. Once a model is applied, some of the edges in this graph are discarded based on their associated weights, and what remains is a multi-component graph where each component, or cluster, is a distinct strain, as mentioned above.  
+
+The purpose of pp-netlib is to take these graph functions and wrap them in a separate python module, so that it can be imported into PopPUNK where needed, and also so that it can be used standalone for similar applications.  
+
+---
+
+## Notes  
+### prepare_graph  
+
+Whenever a graph is created in a Network instance, whether you load or construct one, it is passed through a function called `prepare_graph`. This function ensures that all nodes in the graph have a node label, and a component membership attribute (i.e. a cluster identity attribute). It also check whether edges are weighted. If a list of labels is passed to the function, then it uses those, otherwise, it names nodes as node1, node2, node3 and so on by default. Similarly, the function can be passed a python dictionary with nodes as the keys and the component they belong to, as corresponding values. If such a dictionary is not passed (for example when constructing a graph), component membership is calculated and stored as a node attribute.  
+
+### How Node Identities Are Tracked  
+
+Graph-tool is quite fast as its core functionalities are written in C++, but when adding nodes to a graph, it uses (and expects the inputs to be in the form of) integers. That is, nodes are identified by an integer, and new nodes added to existing networks of size n, get identities of n+1, n+2 and so on. In order to preserve uniformity across graph-tool and NetworkX (wherein nodes can be arbitrary Python data types), pp-netlib also maps node labels in the input data to integers. First, it cleans up the labels, removing some special characters as noted elsewhere, and sorts the resulting list. Next, it creates an integer mapping to each node label. Finally, it converts the node labels in the edge data to their corresponding integer maps.  
+
+Thus, edge data that looks like this:  
+
+```
+source  target
+a   b
+b   c
+b   d
+c   e
+```  
+
+Becomes:  
+
+```
+source  target
+0   1
+1   2
+1   3
+2   4
+```  
+
+And a dictionary `{"a":0, "b":1, "c":2, "d":3, "e":4}` is stored as an attribute of the Network instance. When `.add_to_network` is called, pp-netlib checks whether any of the new vertex labels already exist in the graph, and removes them from the `new_vertex_labels` list. Then it updates the vertex map, preserving the mappings for pre-existing nodes, and appending mappings for new ones. Thus, adding ["a", "f", "g"] to a Network instance would result in the following updated dictionary: `{"a":0, "b":1, "c":2, "d":3, "e":4, "f":5, "g":6}`.  
+
+### Pruning  
+
+One distinct advantage of PopPUNK is that adding new samples to one of these premade models is very quick. The tool achieves this by using clique-pruning on the model network to create a reference graph. Essentially, the tool iterates over all cliques in the model network and retains one node from each, ultimately reducing the number of nodes in the reference graph and therefore the number of pairwise comparisons that need to be made in order to assign a new sample to a precalculated strain.  
+
+Another thing to note about pruning is that when using NetworkX, a known issue is that pruning is not deterministic. Since reference nodes from each clique are chosen at random, the exact identity of the set of reference nodes, and therefore the number and identity of the resulting edges changes when NetworkX is used. This is not an issue when using graph-tool however.  
+
+### Network Attributes  
+
+#### attributes added in initialisation  
+- `example_graph.outdir`  
+- `example_graph.backend`  
+- `example_graph.ref_list`  
+- `example_graph.graph` (initialised as None; can be used directly as a graph-tool or networkx graph if called in this way)  
+- `example_graph.ref_graph` (initialised as None, only exists if pruning is done)  
+- `example_graph.mst_network` (initialised as None, only exists if visualisation with `viz_type="mst"` is done)  
+
+#### attributes added after construct or load  
+- `example_graph.vertex_labels` (cleaned and sorted `ref_list`)  
+- `example_graph.vertex_map` (see [note](#how-node-identities-are-tracked))  
+- `example_graph.weights`  
+
+#### attributes added after write_metadata  
+- `example_graph.edge_data`  
+- `example_graph.sample_metadata`  
+
 ---
 
 ## List of Options and Default Behaviours  
@@ -146,7 +237,9 @@ example_graph.visualize(viz_type, out_prefix, external_data)
     - `out_prefix`_mst_cluster_plot.png (left)  
     - `out_prefix`_mst_stress_plot.png (right)  
 
-![cluster_plot](./tests/example/mlst_mst_mst_cluster_plot.png) ![stress_plot](./tests/example/mlst_mst_mst_stress_plot.png)
+Cluster Plot             |  Stress Plot
+:-------------------------:|:-------------------------:
+![cluster_plot](./tests/example/mlst_mst_mst_cluster_plot.png)  |  ![stress_plot](./tests/example/mlst_mst_mst_stress_plot.png)
 
 - If "cytoscape" is specified, a new "cytoscape" directory is created as above and the following outputs are generated:  
     - `out_prefix`_mst.graphml (this is produced ONLY if the Network instance contains an MST, i.e. is `viz_type="mst"` has been run first)  
