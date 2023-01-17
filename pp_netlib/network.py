@@ -551,7 +551,7 @@ class Network:
         Args:
             file_name (str): Name to be given to the graph file
             file_format (str): File extenstion to be used with graph file
-            to_save (str): Which graph to save. Allowed values are "full_graph", "pruned_graph", "both"
+            to_save (str): Which graph to save. Allowed values are "full_graph", "ref_graph", "both"
 
             Example:
             ```
