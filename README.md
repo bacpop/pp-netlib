@@ -304,7 +304,7 @@ example_graph.write_metadata(out_prefix, meta_outdir, external_data)
 `meta_outdir (pathlike/str)`, **optional**: A separate directory to save metadata files to. Defaults to the `outdir` of the Network instance.  
 `external_data (pathlike/str *OR* pd.DataFrame)`, **optional**: A file containing other data associated with each sample.  
 
-Writing metadata produces:
+Writing metadata produces:  
     - `out_prefix`_node_data.tsv (with `external_data` merged by sample_id)  
     - `out_prefix`_edge_data.tsv`  
 
