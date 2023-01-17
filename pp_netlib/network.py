@@ -47,7 +47,7 @@ class Network:
         self.graph = None # empty graph
         self.ref_graph = None # empty pruned graph
         self.mst_network = None # empty mst
-        
+
         ## if backend not provided when Network is initialised, try to read backend from env
         ## if backend is provided during init AND set as env var, value provided during init will be used.
         if backend is None:
@@ -151,7 +151,7 @@ class Network:
         ########################
 
         ## clean up problem characters in sample names, store as vertex_labels attribute
-        vertex_labels = [sample.replace('.','_').replace(':','').replace('(','_').replace(')','_') for sample in self.ref_list]
+        vertex_labels = [sample.replace('.','_').replace(':','_').replace('(','_').replace(')','_') for sample in self.ref_list]
         self.vertex_labels = sorted(vertex_labels)
 
         ## create a graph
@@ -245,7 +245,7 @@ class Network:
         Raises:
             RuntimeError: RuntimeError raised if no graph initialised.
         """
-        
+
         if self.graph is None:
             raise RuntimeError("Graph not constructed or loaded.")
 
@@ -300,7 +300,7 @@ class Network:
 
                 isolate_clustering = get_gt_clusters(self.graph)
                 draw_gt_mst(mst = self.mst_network, out_prefix = os.path.join(mst_outdir, out_prefix), isolate_clustering=isolate_clustering, overwrite=True)
-            
+
             if self.backend == "NX":
                 from pp_netlib.functions import draw_nx_mst, get_nx_clusters
 
@@ -309,7 +309,7 @@ class Network:
 
         if viz_type == "cytoscape":
             from pp_netlib.functions import write_cytoscape_csv
-        
+
             ## set up output directory as {self.outdir}/cytoscape; create it if it does not exist
             cytoscape_outdir = os.path.join(self.outdir, "cytoscape")
             if not os.path.exists(cytoscape_outdir):
@@ -326,15 +326,16 @@ class Network:
                 gt_save_graph_components(self.graph, out_prefix, cytoscape_outdir)
                 clustering = get_gt_clusters(self.graph)
 
-                write_cytoscape_csv(os.path.join(cytoscape_outdir, out_prefix+".csv"), clustering.keys(), clustering, external_data)
+                #write_cytoscape_csv(os.path.join(cytoscape_outdir, out_prefix+".csv"), clustering.keys(), clustering, external_data)
+                self.write_metadata(out_prefix=out_prefix, meta_outdir=cytoscape_outdir, external_data=external_data)
 
             if self.backend == "NX":
                 from pp_netlib.functions import nx_save_graph_components, get_nx_clusters
                 nx_save_graph_components(self.graph, out_prefix, cytoscape_outdir)
                 clustering = get_nx_clusters(self.graph)
 
-                write_cytoscape_csv(os.path.join(cytoscape_outdir, out_prefix+".csv"), clustering.keys(), clustering, external_data)
-
+                #write_cytoscape_csv(os.path.join(cytoscape_outdir, out_prefix+".csv"), clustering.keys(), clustering, external_data)
+                self.write_metadata(out_prefix=out_prefix, meta_outdir=cytoscape_outdir, external_data=external_data)
     visualise = visualize ## alias for visalize method
 
     def load_network(self, network_file, sample_metadata_csv = None):
@@ -345,7 +346,7 @@ class Network:
         """
         if self.graph is not None:
             raise RuntimeError("Network instance already contains a graph. Cannot load another graph.\n\n")
-        
+
         # Load the network from the specified file
         file_name, file_extension = os.path.splitext(network_file)
 
@@ -370,7 +371,7 @@ class Network:
                 num_nodes = len(self.graph.nodes())
                 num_edges = len(self.graph.edges())
                 self.nx.convert_node_labels_to_integers(self.graph, first_label=0)
-        
+
             sys.stderr.write(f"Loaded network with {num_nodes} nodes and {num_edges} edges with {self.backend}.\n\n") 
 
         else:
@@ -390,7 +391,7 @@ class Network:
                 clustering[vertex] = cluster
 
             prepare_graph(self.graph, backend = self.backend, labels = labels_to_apply, clustering = clustering) # prepare graph based on given metadata
-            
+
         else:
             prepare_graph(self.graph, backend = self.backend) # prepare graph de novo
 
@@ -520,7 +521,7 @@ class Network:
             from pp_netlib.functions import nx_get_graph_data
             self.edge_data, self.sample_metadata = nx_get_graph_data(self.graph)
 
-        
+
         edge_data = pd.DataFrame.from_dict(self.edge_data, orient="index")
         if len(edge_data.columns) == 2:
             edge_data.columns = ["source", "target"]
@@ -528,21 +529,21 @@ class Network:
             edge_data.columns = ["source", "target", "weight"]
 
         edge_data.to_csv(os.path.join(meta_outdir, out_prefix+"_edge_data.tsv"), sep="\t", index=False)
-        
+
         if external_data is None:
             pd.DataFrame.from_dict(self.sample_metadata, orient="index", columns=["sample_id", "sample_component"]).to_csv(os.path.join(meta_outdir, out_prefix+"_node_data.tsv"), sep="\t", index=False)
 
         else:
             node_data_df = pd.DataFrame.from_dict(self.sample_metadata, orient="index", columns=["sample_id", "sample_component"])
             if isinstance(external_data, str):
-                external_data_df = pd.read_csv(external_data, sep="\t", header=0)
+                external_data_df = pd.read_csv(external_data, header=0)
                 external_data_df["sample_id"] = [sample.replace('.','_').replace(':','').replace('(','_').replace(')','_') for sample in external_data_df["sample_id"]]
                 sample_metadata = pd.merge(node_data_df, external_data_df, on="sample_id")
             elif isinstance(external_data, pd.DataFrame):
                 external_data_df["sample_id"] = [sample.replace('.','_').replace(':','').replace('(','_').replace(')','_') for sample in external_data_df["sample_id"]]
                 sample_metadata = pd.merge(node_data_df, external_data, on="sample_id")
 
-            sample_metadata.to_csv(os.path.join(meta_outdir, out_prefix), sep="\t", index=False)
+            sample_metadata.to_csv(os.path.join(meta_outdir, out_prefix+"_node_data.tsv"), sep="\t", index=False)
 
     def save(self, file_name, file_format, to_save="both"):
         """Save graph to file.
@@ -568,7 +569,7 @@ class Network:
             to_save = "full_graph"
 
         # save_graph(graph=self.graph, backend=self.backend, outdir = self.outdir, file_name=file_name, file_format=file_format)
-        
+
         if to_save == "full_graph" or to_save == "both":
             save_graph(graph=self.graph, backend=self.backend, outdir = self.outdir, file_name=file_name, file_format=file_format)
         if to_save == "ref_graph" or to_save == "both":

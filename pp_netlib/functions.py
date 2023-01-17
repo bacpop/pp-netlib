@@ -32,10 +32,12 @@ def get_edge_list(network_data, weights = None):
 
         sources = [vertex_map[vertex] for vertex in network_data["source"]]
         targets = [vertex_map[vertex] for vertex in network_data["target"]]
-        
+
         ## add weights column if weights provided as list (add error catching?)
         if weights is not None:
-            if isinstance(weights, list):
+            if weights == False:
+                edge_list = list(zip(sources, targets))
+            elif isinstance(weights, list):
                 edge_list = list(zip(sources, targets, weights))
             else:
                 try:
@@ -43,7 +45,7 @@ def get_edge_list(network_data, weights = None):
                     edge_list = list(zip(sources, targets, weights))
                 except KeyError as ke:
                     raise ke
-    
+
         else:
             edge_list = list(zip(sources, targets))
 
@@ -63,7 +65,7 @@ def get_edge_list(network_data, weights = None):
         target_idx = [vertex_map[vertex] for vertex in targets]
 
         edge_list = list(zip(source_idx, target_idx, weights))
-        
+
 
     ########################
     ####   LIST INPUT   ####
@@ -104,7 +106,7 @@ def get_edge_list(network_data, weights = None):
                     edge_list = list(zip(source_idx, target_idx, weights))
                 else:
                     raise ve
-        
+
     return vertex_map, edge_list
 
 def construct_graph(network_data, vertex_labels, backend, weights = None):
@@ -122,12 +124,12 @@ def construct_graph(network_data, vertex_labels, backend, weights = None):
 
         ***
         NB: Note that vertex_labels are sorted before being passed to this function
-        
+
         If edges in network_data are of type (0,1), (0,2)...: and vertex_labels = ["s1", "s2", "s3"];
         Edge 1 is ("s1", "s2");, edge 2 is ("s1", "s3")
-        
+
         If edges in network_data are of type ("s1", "s2"), ("s1", "s3")...: and vertex_labels = ["s1", "s2", "s3"];
-        Edge 1 and edge 2 are as above. 
+        Edge 1 and edge 2 are as above.
         ***
     """
 
@@ -155,7 +157,7 @@ def construct_graph(network_data, vertex_labels, backend, weights = None):
 
     elif backend == "NX":
         import networkx as nx
-    
+
         ## initialise nx graph and add nodes
         graph = nx.Graph()
         nodes_list = [(i, dict(id=vertex_labels[i])) for i in range(len(vertex_labels))]
@@ -168,7 +170,7 @@ def construct_graph(network_data, vertex_labels, backend, weights = None):
 
         # for idx in vertex_map.values():
         #     graph.nodes[idx]["id"] = vertex_labels[idx]
-    
+
     elif backend == "CU":
             raise NotImplementedError("GPU graph not yet implemented")
 
@@ -234,7 +236,7 @@ def summarise(graph, backend):
     metrics = [components, density, transitivity, mean_bt, weighted_mean_bt]
     base_score = transitivity * (1 - density)
     scores = [base_score, base_score * (1 - metrics[3]), base_score * (1 - metrics[4])]
-    
+
     return metrics, scores
 
 ########################
@@ -467,7 +469,7 @@ def nx_generate_mst(graph):
                 if seed_edge[1] in seed_vertices:
                     found = True
                     connections.append((seed_edge))
-    
+
             if found == False:
                 for query in seed_vertices:
                     if query != ref:
@@ -569,7 +571,7 @@ def draw_gt_mst(mst, out_prefix, isolate_clustering, overwrite):
         overwrite (bool): Overwrite existing output files
     """
     import graph_tool.all as gt
-    
+
     graph1_file_name = out_prefix + "_mst_stress_plot.png"
     graph2_file_name = out_prefix + "_mst_cluster_plot.png"
     if overwrite or not os.path.isfile(graph1_file_name) or not os.path.isfile(graph2_file_name):
@@ -608,7 +610,7 @@ def draw_nx_mst(mst, out_prefix, isolate_clustering, overwrite):
         overwrite (bool): Overwrite existing output files
     """
     import networkx as nx
-    
+
     import matplotlib.pyplot as plt
 
     graph1_file_name = out_prefix + "_mst_stress_plot.png"
@@ -726,7 +728,7 @@ def nx_get_graph_data(graph):
 
     for idx, (v, v_data) in enumerate(graph.nodes(data=True)):
         node_data[idx] = [v_data["id"], v_data["comp_membership"]]
-    
+
     return edge_data, node_data
 
 def write_cytoscape_csv(outfile, node_names, clustering, epi_csv = None, suffix = '_Cluster'):
@@ -735,7 +737,7 @@ def write_cytoscape_csv(outfile, node_names, clustering, epi_csv = None, suffix 
     for cluster_type in clustering:
         col_name = cluster_type + suffix
         colnames.append(col_name)
-    
+
     # process epidemiological data
     d = defaultdict(list)
 
