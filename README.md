@@ -19,6 +19,8 @@
     - [Save](#save)
     - [Write Metadata](#write-metadata)
 
+For a python notebook with an example of how one might use `pp-netlib` standalone, see [tests/example/mlst_example](./tests/example/mlst_example/mlst_example.ipynb).
+
 ## Install  
 
 ```
