@@ -28,7 +28,7 @@ jobs:
       run: |
         # conda install flake8
         # mamba install flake8
-        echo $MAMBA_ROOT_PREFIX/bin >> $GITHUB_PATH && mamba activate netlib_env
+        echo $MAMBA_ROOT_PREFIX/bin >> $GITHUB_PATH && micromamba activate netlib_env
         # stop the build if there are Python syntax errors or undefined names
         flake8 . --count --select=E9,F63,F7 --show-source --statistics --exit-zero
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
