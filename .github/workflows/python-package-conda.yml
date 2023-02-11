@@ -22,7 +22,7 @@ jobs:
       uses: mamba-org/provision-with-micromamba@main
       with:
         environment-file: env.yaml
-        environment-name: netlib_env
+        # environment-name: netlib_env
         cache-env: true
       # run: |
       #   conda env update --file env.yaml --name base
