@@ -18,10 +18,6 @@ jobs:
     #   run: |
     #     # $CONDA is an environment variable pointing to the root of the miniconda directory
     #     echo $CONDA/bin >> $GITHUB_PATH
-    - name: Add mamba to system path
-      run: |
-        # $MAMBA_ROOT_PREFIX is an environment variable pointing to the root of the miniconda directory
-        echo $MAMBA_ROOT_PREFIX/bin >> $GITHUB_PATH
     - name: Install dependencies
       uses: mamba-org/provision-with-micromamba@main
       with:
@@ -33,7 +29,7 @@ jobs:
     - name: Lint with flake8
       run: |
         # conda install flake8
-        mamba install flake8
+        # mamba install flake8
         # stop the build if there are Python syntax errors or undefined names
         flake8 . --count --select=E9,F63,F7 --show-source --statistics --exit-zero
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
