@@ -18,14 +18,18 @@ jobs:
     #   run: |
     #     # $CONDA is an environment variable pointing to the root of the miniconda directory
     #     echo $CONDA/bin >> $GITHUB_PATH
+    - name: Add mamba to system path
+      run: |
+        # $CONDA is an environment variable pointing to the root of the miniconda directory
+        echo $MAMBA_ROOT_PREFIX/bin >> $GITHUB_PATH
     - name: Install dependencies
       uses: mamba-org/provision-with-micromamba@main
       with:
         environment-file: env.yaml
         # environment-name: netlib_env
         cache-env: true
-      # run: |
-      #   conda env update --file env.yaml --name base
+      run: |
+        mamba env update --file env.yaml --name base
     - name: Lint with flake8
       run: |
         # conda install flake8
