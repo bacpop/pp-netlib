@@ -1,11 +1,133 @@
 import sys
 import operator
+import pandas as pd
 from scipy.stats import rankdata
-from pp_netlib.utils import gen_unword, read_isolate_type_from_csv, print_external_clusters
 import graph_tool.all as gt
 from collections import defaultdict, Counter
 
 RECURSION_LIMIT = 3000
+
+def gen_unword(unique=True):
+    import json
+    import gzip
+    import random
+    import string
+    import pkg_resources
+
+    # Download from https://github.com/dwyl/english-words/raw/master/words_dictionary.json
+    word_list = pkg_resources.resource_stream(__name__, "data/words_dictionary.json.gz")
+    with gzip.open(word_list, "rb") as word_list:
+        real_words = json.load(word_list)
+
+    vowels = ["a", "e", "i", "o", "u"]
+    trouble = ["q", "x", "y"]
+    consonants = set(string.ascii_lowercase) - set(vowels) - set(trouble)
+
+    vowel = lambda: random.sample(vowels, 1)
+    consonant = lambda: random.sample(consonants, 1)
+    cv = lambda: consonant() + vowel()
+    cvc = lambda: cv() + consonant()
+    syllable = lambda: random.sample([vowel, cv, cvc], 1)
+
+    returned_words = set()
+    # Iterator loop
+    while True:
+        # Retry loop
+        while True:
+            word = ""
+            for i in range(random.randint(2, 3)):
+                word += "".join(syllable()[0]())
+            if word not in real_words and (not unique or word not in returned_words):
+                returned_words.add(word)
+                break
+        yield word
+
+def read_isolate_type_from_csv(clusters_csv, mode = "clusters", return_dict = False):
+    """Read cluster definitions from CSV file.
+    Args:
+        clusters_csv (str)
+            File name of CSV with isolate assignments
+        return_type (str)
+            If True, return a dict with sample->cluster instead
+            of sets
+    Returns:
+        clusters (dict)
+            Dictionary of cluster assignments (keys are cluster names, values are
+            sets containing samples in the cluster). Or if return_dict is set keys
+            are sample names, values are cluster assignments.
+    """
+    # data structures
+    if return_dict:
+        clusters = defaultdict(dict)
+    else:
+        clusters = {}
+
+    # read CSV
+    clusters_csv_df = pd.read_csv(clusters_csv, index_col = 0, quotechar='"')
+
+    # select relevant columns according to mode
+    if mode == "clusters":
+        type_columns = [n for n,col in enumerate(clusters_csv_df.columns) if ("Cluster" in col)]
+    elif mode == "lineages":
+        type_columns = [n for n,col in enumerate(clusters_csv_df.columns) if ("Rank_" in col or "overall" in col)]
+    elif mode == "external":
+        if len(clusters_csv_df.columns) == 1:
+            type_columns = [0]
+        elif len(clusters_csv_df.columns) > 1:
+            type_columns = range((len(clusters_csv_df.columns)-1))
+    else:
+        sys.stderr.write("Unknown CSV reading mode: " + mode + "\n")
+        sys.exit(1)
+
+    # read file
+    for row in clusters_csv_df.itertuples():
+        for cls_idx in type_columns:
+            cluster_name = clusters_csv_df.columns[cls_idx]
+            cluster_name = cluster_name.replace("__autocolour","")
+            if return_dict:
+                clusters[cluster_name][str(row.Index)] = str(row[cls_idx + 1])
+            else:
+                if cluster_name not in clusters.keys():
+                    clusters[cluster_name] = defaultdict(set)
+                clusters[cluster_name][str(row[cls_idx + 1])].add(row.Index)
+
+    # return data structure
+    return clusters
+
+def print_external_clusters(newClusters, extClusterFile, outPrefix,
+                          oldNames, printRef = True):
+    # Object to store output csv datatable
+    data_table = defaultdict(list)
+
+    # Read in external clusters
+    extClusters = read_isolate_type_from_csv(extClusterFile, mode = "external", return_dict = True)
+
+    # Go through each cluster (as defined by poppunk) and find the external
+    # clusters that had previously been assigned to any sample in the cluster
+    for ppCluster in newClusters:
+        # Store clusters as a set to avoid duplicates
+        prevClusters = defaultdict(set)
+        for sample in ppCluster:
+            for extCluster in extClusters:
+                if sample in extClusters[extCluster]:
+                    prevClusters[extCluster].add(extClusters[extCluster][sample])
+
+        # Go back through and print the samples that were found
+        for sample in ppCluster:
+            if printRef or sample not in oldNames:
+                data_table["sample"].append(sample)
+                for extCluster in extClusters:
+                    if extCluster in prevClusters:
+                        data_table[extCluster].append(";".join(prevClusters[extCluster]))
+                    else:
+                        data_table[extCluster].append("NA")
+
+    if "sample" not in data_table:
+        sys.stderr.write("WARNING: No new samples found, cannot write external clusters\n")
+    else:
+        pd.DataFrame(data=data_table).to_csv(outPrefix + "_external_clusters.csv",
+                                    columns = ["sample"] + list(extClusters.keys()),
+                                    index = False)
 
 def get_gt_clique_refs(graph, reference_indices:set()):
     """Recursively prune a network of its cliques. Returns one vertex from

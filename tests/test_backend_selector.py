@@ -1,11 +1,8 @@
 import os
 import graph_tool
-import numpy as np
-import pandas as pd
 import argparse
 import graph_tool.all as gt
 import networkx as nx
-from scipy.sparse import coo_matrix
 
 from pp_netlib.network import Network
 
@@ -50,7 +47,7 @@ def __init__():
 def set_with_python_gt(premade_gt_graph, sample_edge_list, weights):
     os.environ["GRAPH_BACKEND"] = "GT"
     print(os.getenv("GRAPH_BACKEND"))
-    testing_weighted_network = Network(ref_list=["s1", "s2", "s3", "s4", "s5"], query_list=["s1", "s2", "s3", "s4", "s5"], outdir="tests/")
+    testing_weighted_network = Network(ref_list=["s1", "s2", "s3", "s4", "s5"], outdir="tests/")
     testing_weighted_network.construct(sample_edge_list, weights)
     gt_edges = [e for e in premade_gt_graph.edges()]
     gt_test_edges = [e for e in testing_weighted_network.graph.edges()]
@@ -64,7 +61,7 @@ def set_with_python_gt(premade_gt_graph, sample_edge_list, weights):
 def set_with_python_nx(premade_nx_graph, sample_edge_list, weights):
     os.environ["GRAPH_BACKEND"] = "NX"
     print(os.getenv("GRAPH_BACKEND"))
-    testing_weighted_network = Network(ref_list=["s1", "s2", "s3", "s4", "s5"], query_list=["s1", "s2", "s3", "s4", "s5"], outdir="tests/")
+    testing_weighted_network = Network(ref_list=["s1", "s2", "s3", "s4", "s5"], outdir="tests/")
     testing_weighted_network.construct(sample_edge_list, weights)
     nx_edges = list(premade_nx_graph.edges())
     nx_test_edges = list(testing_weighted_network.graph.edges())
@@ -83,7 +80,7 @@ if __name__ == "__main__":
         set_with_python_nx(nx_weighted_graph, sample_edge_list, weights)
     else:
         print(os.getenv("GRAPH_BACKEND"))
-        testing_weighted_network = Network(ref_list=["s1", "s2", "s3", "s4", "s5"], query_list=["s1", "s2", "s3", "s4", "s5"], outdir="tests/")
+        testing_weighted_network = Network(ref_list=["s1", "s2", "s3", "s4", "s5"], outdir="tests/")
         testing_weighted_network.construct(sample_edge_list, weights)
         try:
             assert testing_weighted_network.backend == os.getenv("GRAPH_BACKEND")

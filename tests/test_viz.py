@@ -1,5 +1,6 @@
 import os
 import graph_tool.all as gt
+import pandas as pd
 import networkx as nx
 
 from pp_netlib.network import Network
@@ -60,8 +61,10 @@ def test_gt_cytoscape(sample_file):
     sample_gt_graph = Network([], outdir="tests/", backend = "GT")
     sample_gt_graph.load_network(sample_file)
 
-    sample_gt_graph.visualize("cytoscape", "test_gt")
-    expected_outfiles = ["tests/cytoscape/test_gt_cytoscape.graphml", "tests/cytoscape/test_gt.csv"]
+    test_node_data = pd.read_csv("tests/test_metadata.tsv", sep = "\t", header=0)
+    print(test_node_data.columns)
+    sample_gt_graph.visualize("cytoscape", "test_gt", test_node_data)
+    expected_outfiles = ["tests/cytoscape/test_gt_cytoscape.graphml", "tests/cytoscape/test_gt_edge_data.tsv", "tests/cytoscape/test_gt_node_data.tsv"]
 
     num_components = len(set(gt.label_components(sample_gt_graph.graph)[0].a))
     for i in range (num_components):
@@ -76,16 +79,22 @@ def test_gt_cytoscape(sample_file):
 
     for outfile in expected_outfiles:
         os.remove(outfile)
+    try:
+        assert "cluster" in sample_gt_graph.sample_metadata.keys()
+        print("Metadata merge succeeded.")
+    except AssertionError as ae:
+        print("Metadata merge failed.")
 
-    os.rmdir("./tests/cytoscape")
+
+    os.rmdir("tests/cytoscape")
     print("Cleanup after GT cytoscape test done.\n")
 
 def test_nx_cytoscape(sample_file):
     sample_nx_graph = Network([], outdir="tests/", backend = "NX")
     sample_nx_graph.load_network(sample_file)
 
-    sample_nx_graph.visualize("cytoscape", "test_nx")
-    expected_outfiles = ["tests/cytoscape/test_nx_cytoscape.graphml", "tests/cytoscape/test_nx.csv"]
+    sample_nx_graph.visualize("cytoscape", "test_nx", "tests/test_metadata.tsv")
+    expected_outfiles = ["tests/cytoscape/test_nx_cytoscape.graphml", "tests/cytoscape/test_nx_edge_data.tsv", "tests/cytoscape/test_nx_node_data.tsv"]
 
     num_components = nx.number_connected_components(sample_nx_graph.graph)
     for i in range (num_components):
@@ -100,6 +109,12 @@ def test_nx_cytoscape(sample_file):
 
     for outfile in expected_outfiles:
         os.remove(outfile)
+
+    try:
+        assert "cluster" in sample_nx_graph.sample_metadata.keys()
+        print("Metadata merge succeeded.")
+    except AssertionError as ae:
+        print("Metadata merge failed.")
 
     os.rmdir("./tests/cytoscape")
     print("Cleanup after NX cytoscape test done.\n")

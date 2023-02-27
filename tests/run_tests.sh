@@ -36,3 +36,6 @@ python tests/test_prune.py
 
 ## test visualization; currently mst only
 python tests/test_viz.py
+
+## test graph prep and metadata method
+python tests/test_graph_prep.py

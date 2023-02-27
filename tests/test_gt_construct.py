@@ -25,7 +25,7 @@ def __init__():
     sample_weighted_edge_list = [(0, 1, 0.1), (1, 2, 0.1), (2, 3, 0.5), (3, 4, 0.7), (4, 0, 0.2)]
 
     ## setting up test dataframe
-    sample_df_data = {0: [0, 1, 2, 3, 4], 1: [1, 2, 3, 4, 0]}
+    sample_df_data = {"source": [0, 1, 2, 3, 4], "target": [1, 2, 3, 4, 0]}
     sample_df = pd.DataFrame(sample_df_data)
 
     weights = [0.1, 0.1, 0.5, 0.7, 0.2]
@@ -61,8 +61,8 @@ def __init__():
 
 
     ## intialising network
-    testing_network = Network(ref_list=["s1", "s2", "s3", "s4", "s5"], query_list=["s1", "s2", "s3", "s4", "s5"], backend="GT", outdir="tests/")
-    testing_weighted_network = Network(ref_list=["s1", "s2", "s3", "s4", "s5"], query_list=["s1", "s2", "s3", "s4", "s5"], backend="GT", outdir="tests/")
+    testing_network = Network(ref_list=["s1", "s2", "s3", "s4", "s5"], backend="GT", outdir="tests/")
+    testing_weighted_network = Network(ref_list=["s1", "s2", "s3", "s4", "s5"], backend="GT", outdir="tests/")
 
     return graph, weighted_graph, sample_df, sample_edge_list, sample_coo, testing_network, testing_weighted_network, weights
 
@@ -95,6 +95,8 @@ def gt_test_from_df(data_df, graph, weighted_graph, network, weighted_network, w
 
     ref_ids = [graph.vp["id"][v] for v in graph.vertices()]
     test_ids = [network.graph.vp["id"][v] for v in network.graph.vertices()]
+    print(ref_ids)
+    print(test_ids)
 
     ref_weighted_ids = [weighted_graph.vp["id"][v] for v in weighted_graph.vertices()]
     test_weighted_ids = [weighted_network.graph.vp["id"][v] for v in weighted_network.graph.vertices()]

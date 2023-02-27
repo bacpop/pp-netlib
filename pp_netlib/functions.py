@@ -9,129 +9,172 @@ import numpy as np
 import pandas as pd
 import os, sys
 
-def construct_with_graphtool(network_data, vertex_labels, weights = None):
-    """Construct a graph with graph-tool
+def get_edge_list(network_data, weights = None):
+    """Get an edge list from input data.
 
     Args:
-        network_data (dataframe OR edge list OR sparse coordinate matrix): Data containing record of edges in the graph.
-        vertex_labels (list): List of vertex/node labels to apply to graph vertices
-        weights (list, optional): List of weights associated with edges in network_data.
-                                      Weights must be in the same order as edges in network_data. Defaults to None.
+        network_data (dataframe OR edge list OR sparse coordinate matrix): Data describing graph edges
+        weights (bool/list, optional): Whether edges are weighted. Defaults to None. If not None, it is expected to be a list of weights (floats).
+            If list, weights are expected to be in the same order as their corresponding edges in network data.
 
     Returns:
-        graph (gt.Graph): Graph-tool graph object populated with network data
+        vertex_map (dict): Dictionary of sample names taken from network_data; sample names are keys, their index in a sorted list of names is the value
+        edge_list (list of tuples): Edge list as (source, target) if unweighted data and (source, target, weight) if weighted data provided
     """
-    import graph_tool.all as gt
-
-    graph = gt.Graph(directed = False) ## initialise graph_tool graph object
-
     ########################
     ####    DF INPUT    ####
     ########################
     if isinstance(network_data, pd.DataFrame):
-        network_data.columns = ["source", "destination"]
+        vertices = set(network_data["source"]).union(set(network_data["target"]))
+        vertex_map = {}
+        for idx, vertex in enumerate(sorted(vertices)):
+            vertex_map[vertex] = idx
 
-        graph.add_vertex(len(vertex_labels)) ## add vertices
+        sources = [vertex_map[vertex] for vertex in network_data["source"]]
+        targets = [vertex_map[vertex] for vertex in network_data["target"]]
 
         ## add weights column if weights provided as list (add error catching?)
         if weights is not None:
-            network_data["weights"] = weights
-            eweight = graph.new_ep("float")
-            graph.add_edge_list(network_data.values, eprops = [eweight]) ## add weighted edges
-            graph.edge_properties["weight"] = eweight
+            if weights == False:
+                edge_list = list(zip(sources, targets))
+            elif isinstance(weights, list):
+                edge_list = list(zip(sources, targets, weights))
+            else:
+                try:
+                    weights = network_data["weights"]
+                    edge_list = list(zip(sources, targets, weights))
+                except KeyError as ke:
+                    raise ke
+
         else:
-            graph.add_edge_list(network_data.values) ## add edges
+            edge_list = list(zip(sources, targets))
 
     ##########################
     #### SPARSE MAT INPUT ####
     ##########################
     elif isinstance(network_data, scipy.sparse.coo_matrix):
-        graph_data_df = pd.DataFrame()
-        graph_data_df["source"] = network_data.row
-        graph_data_df["destination"] =  network_data.col
-        graph_data_df["weights"] = network_data.data
+        sources = list(network_data.row)
+        targets = list(network_data.col)
+        weights = list(network_data.data)
 
-        graph.add_vertex(len(vertex_labels)) ## add vertices
-        eweight = graph.new_ep("float")
-        graph.add_edge_list(list(map(tuple, graph_data_df.values)), eprops = [eweight]) ## add weighted edges
-        graph.edge_properties["weight"] = eweight
+        vertices = set(sources).union(set(targets))
+        vertex_map = {}
+        for idx, vertex in enumerate(sorted(vertices)):
+            vertex_map[vertex] = idx
+        source_idx = [vertex_map[vertex] for vertex in sources]
+        target_idx = [vertex_map[vertex] for vertex in targets]
+
+        edge_list = list(zip(source_idx, target_idx, weights))
+
 
     ########################
     ####   LIST INPUT   ####
     ########################
     elif isinstance(network_data, list):
-        graph.add_vertex(len(vertex_labels)) ## add vertices
 
-        if weights is not None:
-            weighted_edges = []
-
-            for i in range(len(network_data)):
-                weighted_edges.append(network_data[i] + (weights[i],))
-
-            eweight = graph.new_ep("float")
-            graph.add_edge_list(weighted_edges, eprops = [eweight]) ## add weighted edges
-            graph.edge_properties["weight"] = eweight
+        if weights is None:
+            sources, targets = zip(*network_data)
+            vertices = set(sources).union(set(targets))
+            vertex_map = {}
+            for idx, vertex in enumerate(sorted(vertices)):
+                vertex_map[vertex] = idx
+            source_idx = [vertex_map[vertex] for vertex in sources]
+            target_idx = [vertex_map[vertex] for vertex in targets]
+            edge_list = list(zip(source_idx, target_idx))
 
         else:
-            graph.add_edge_list(network_data) ## add edges
+            try:
+                sources, targets, weights = zip(*network_data)
+                vertices = set(sources).union(set(targets))
+                vertex_map = {}
+                for idx, vertex in enumerate(sorted(vertices)):
+                    vertex_map[vertex] = idx
+                source_idx = [vertex_map[vertex] for vertex in sources]
+                target_idx = [vertex_map[vertex] for vertex in targets]
 
-    v_name_prop = graph.new_vp("string")
-    graph.vertex_properties["id"] = v_name_prop
-    for i in range(len([v for v in graph.vertices()])):
-        v_name_prop[graph.vertex(i)] = vertex_labels[i]
+                edge_list = list(zip(source_idx, target_idx, weights))
+            except ValueError as ve:
+                if isinstance(weights, list):
+                    sources, targets = zip(*network_data)
+                    vertices = set(sources).union(set(targets))
+                    vertex_map = {}
+                    for idx, vertex in enumerate(sorted(vertices)):
+                        vertex_map[vertex] = idx
+                    source_idx = [vertex_map[vertex] for vertex in sources]
+                    target_idx = [vertex_map[vertex] for vertex in targets]
 
-    return graph
+                    edge_list = list(zip(source_idx, target_idx, weights))
+                else:
+                    raise ve
 
-def construct_with_networkx(network_data, vertex_labels, weights = None):
-    """Construct a graph with networkx
+    return vertex_map, edge_list
+
+def construct_graph(network_data, vertex_labels, backend, weights = None):
+    """Construct graph from edge list produced by get_edge_list
 
     Args:
-        network_data (dataframe OR edge list OR sparse coordinate matrix): Data containing record of edges in the graph.
-        vertex_labels (list): List of vertex/node labels to apply to graph vertices
-        weights (list, optional): List of weights associated with edges in network_data.
-                                      Weights must be in the same order as edges in network_data. Defaults to None.
+        network_data (dataframe OR edge list OR sparse coordinate matrix): Data describing graph edges
+        vertex_labels (list): List of sample names
+        backend (str): Graphing module to use ("GT"/"NX")
+        weights (bool/list, optional): Whether edges are weighted. Defaults to None. If not None, it is expected to be a list of weights (floats).
+            If list, weights are expected to be in the same order as their corresponding edges in network data.
 
     Returns:
-        graph (nx.Graph): Graph-tool graph object populated with network data
+        graph (gt.Graph or nx.Graph): Graph populated with nodes, edges; nodes have attribute "id"
+
+        ***
+        NB: Note that vertex_labels are sorted before being passed to this function
+
+        If edges in network_data are of type (0,1), (0,2)...: and vertex_labels = ["s1", "s2", "s3"];
+        Edge 1 is ("s1", "s2");, edge 2 is ("s1", "s3")
+
+        If edges in network_data are of type ("s1", "s2"), ("s1", "s3")...: and vertex_labels = ["s1", "s2", "s3"];
+        Edge 1 and edge 2 are as above.
+        ***
     """
-    import networkx as nx
-    
-    ## initialise nx graph and add nodes
-    graph = nx.Graph()
 
-    nodes_list = [(i, dict(id=vertex_labels[i])) for i in range(len(vertex_labels))]
-    graph.add_nodes_from(nodes_list)
+    vertex_map, edge_list = get_edge_list(network_data=network_data, weights=weights)
 
-    ########################
-    ####    DF INPUT    ####
-    ########################
-    if isinstance(network_data, pd.DataFrame):
-        network_data.columns = ["source", "destination"]
+    ## set weights to True is input data is a sparse matrix
+    if isinstance(network_data, scipy.sparse.coo_matrix):
+        weights = True
+
+    if backend == "GT":
+        import graph_tool.all as gt
+
+        graph = gt.Graph(directed = False) ## initialise graph_tool graph object
         if weights is not None:
-            network_data["weights"] = weights
-            graph.add_weighted_edges_from(network_data.values)
+            eweight = graph.new_ep("float")
+            graph.add_edge_list(edge_list, eprops = [eweight])
+            graph.edge_properties["weight"] = eweight
         else:
-            graph.add_edges_from(network_data.values)
+            graph.add_edge_list(edge_list)
 
-    ##########################
-    #### SPARSE MAT INPUT ####
-    ##########################
-    elif isinstance(network_data, scipy.sparse.coo_matrix):
-        weighted_edges = list(zip(list(network_data.row), list(network_data.col), list(network_data.data)))
-        graph.add_weighted_edges_from(weighted_edges)
+        v_name_prop = graph.new_vp("string")
+        graph.vertex_properties["id"] = v_name_prop
+        for idx in vertex_map.values():
+            v_name_prop[idx] = vertex_labels[idx]
 
-    ########################
-    ####   LIST INPUT   ####
-    ########################
-    elif isinstance(network_data, list):
+    elif backend == "NX":
+        import networkx as nx
+
+        ## initialise nx graph and add nodes
+        graph = nx.Graph()
+        nodes_list = [(i, dict(id=vertex_labels[i])) for i in range(len(vertex_labels))]
+        graph.add_nodes_from(nodes_list)
+
         if weights is not None:
-            src, dest = zip(*network_data)
-            weighted_edges = list(zip(src, dest, weights))
-            graph.add_weighted_edges_from(weighted_edges)
+            graph.add_weighted_edges_from(edge_list)
         else:
-            graph.add_edges_from(network_data)
+            graph.add_edges_from(edge_list)
 
-    return graph
+        # for idx in vertex_map.values():
+        #     graph.nodes[idx]["id"] = vertex_labels[idx]
+
+    elif backend == "CU":
+            raise NotImplementedError("GPU graph not yet implemented")
+
+    return graph, vertex_map
 
 ########################
 ####   .SUMMARISE   ####
@@ -193,24 +236,33 @@ def summarise(graph, backend):
     metrics = [components, density, transitivity, mean_bt, weighted_mean_bt]
     base_score = transitivity * (1 - density)
     scores = [base_score, base_score * (1 - metrics[3]), base_score * (1 - metrics[4])]
-    
+
     return metrics, scores
 
 ########################
 ####      .SAVE     ####
 ########################
-#TODO
-def prepare_graph(graph, labels, backend):
+def prepare_graph(graph, backend, labels = None, clustering = None):
+    """Prepare a graph, by checking whether the graph nodes have id and component membership/clusteing attributes, and graph edges have weights.
+        If "id" attribute missing, labels are applied as "id"; if labels not provided, "id" is set as "node_(node)"
+        If "comp_membership" attribute missing, clusters are calculated and stored as node attributes
+        If "weight" attribute missing, arbitrary weights added (TODO: is this a good idea?)
 
-    def prep_gt(gt_graph, labels):
+    Args:
+        graph (gt.Graph or nx.Graph): Graph to prepare
+        labels (list): Vertex labels to apply as ids if nodes do not have id attributes
+        backend (str): Whether the graph passed to the function is from "GT" or "NX" 
+    """
+
+    def prep_gt(gt_graph, labels, clustering):
         import graph_tool.all as gt
         ## check that nodes have labels -- required
-        if "id" not in gt_graph.edge_properties:
+        if "id" not in gt_graph.vertex_properties:
             ## if no list of labels is provided, improvise node ids such that for node "i", id=str(i+1)
             if labels is None:
                 v_name_prop = gt_graph.new_vp("string")
                 gt_graph.vertex_properties["id"] = v_name_prop
-                for i, vertex in gt_graph.vertices:
+                for i, vertex in enumerate(gt_graph.vertices()):
                     v_name_prop[vertex] = f"node{i+1}"
 
             ## if a list of labels is provided, apply labels to nodes
@@ -219,23 +271,42 @@ def prepare_graph(graph, labels, backend):
                 gt_graph.vertex_properties["id"] = v_name_prop
                 for vertex, label in zip(gt_graph.vertices(), labels):
                     v_name_prop[vertex] = label
-                # for i in range(len([v for v in gt_graph.vertices()])):
-                #     v_name_prop[gt_graph.vertex(i)] = labels[i]
 
-        ## check if comp_membership is assigned -- could make things easier?
-        if "comp_membership" not in gt_graph.edge_properties:
-            vprop = gt_graph.new_vp("int")
+        ## check if comp_membership is assigned -- make this consistent with clustering by making sure that comp 1 is the largest. Here, calling get_gt_clusters
+        if "comp_membership" not in gt_graph.vertex_properties:
+            if clustering is None: ## if previous clustering not give, calculate clustering -- used primarily for load_network
+                clustering = get_gt_clusters(gt_graph)
+
+            vprop = gt_graph.new_vp("string")
             gt_graph.vp.comp_membership = vprop
-            gt.label_components(gt_graph, vprop="comp_membership")
+            for vertex in gt_graph.iter_vertices():
+                ## comp membership of vertex = the value corresponding to the id of that vertex in clustering
+                gt_graph.vp.comp_membership[vertex] = str(clustering[gt_graph.vp.id[vertex]])
 
-        ## check if edges have weights -- not required for most processes
+        elif "comp_membership" in gt_graph.vertex_properties:
+            # sys.stderr.write("Checking if node component memberships need updating...")
+            component_assignments, component_frequencies = gt.label_components(graph)
+            for component_index in range(len(component_frequencies)):
+                component_members = component_assignments.a == component_index
+                component = gt.GraphView(graph, vfilt = component_members)
+                component_vertices = component.get_vertices()
+                old_comp_memberships = sorted(list(set(graph.vp.comp_membership[v] for v in component_vertices)))
+                if "" in old_comp_memberships:
+                    old_comp_memberships.remove("")
+                if len(old_comp_memberships) > 1:
+                    sys.stderr.write("Updating...\n")
+                    new_comp = "_".join(str(i) for i in old_comp_memberships)
+                    for v in component_vertices:
+                        graph.vp.comp_membership[v] = new_comp
+
+        ## check if edges have weights -- not required for most processes #TODO: is adding arbitrary weights a good idea? Weights are needed for graph viz.
         if "weight" not in gt_graph.edge_properties:
-            sys.stderr.write("Graph edges are not weighted.")
+            sys.stderr.write("Graph edges are not weighted.\n")
 
         return gt_graph
 
 
-    def prep_nx(nx_graph, labels):
+    def prep_nx(nx_graph, labels, clustering):
         import networkx as nx
         node_attrs = list(nx_graph.nodes(data=True))[0][-1].keys() # get keys of attribute dictionary associated with the first node, ie node attributes
         edge_attrs = list(nx_graph.edges(data=True))[0][-1].keys() # get keys of attribute dictionary associated with the first edge, ie edge attributes
@@ -253,34 +324,43 @@ def prepare_graph(graph, labels, backend):
 
         ## check if comp_membership is assigned -- could make things easier?
         if "comp_membership" not in node_attrs:
-            for idx, c in enumerate(sorted(nx.connected_components(nx_graph.graph))):
-                for v in c:
-                    nx_graph.graph.nodes[v]["comp_membership"] = idx
-    
+            if clustering is None: ## if previous clustering not give, calculate clustering -- used primarily for load_network
+                clustering = get_nx_clusters(nx_graph)
+
+            for v in graph.nodes():
+                graph.nodes[v]["comp_membership"] = clustering[v]
+        ## check if comp_memberships are up to date
+        elif "comp_membership" in node_attrs:
+            # sys.stderr.write("Checking if node component memberships need updating...\n")
+            for comp in sorted(nx.connected_components(graph), key=len, reverse=True):
+                old_comp_memberships = list(set(graph.nodes.data("comp_membership")[v] for v in comp))
+                if len(old_comp_memberships) > 1:
+                    sys.stderr.write("Updating...\n")
+                    new_comp = "_".join(str(i) for i in old_comp_memberships).replace("_None", "")
+                    for v in comp:
+                        graph.nodes[v]["comp_membership"] = new_comp
+
         ## check if edges have weights -- not required for most processes
         if "weight" not in edge_attrs:
-            sys.stderr.write("Graph edges are not weighted.")
+            sys.stderr.write("Graph edges are not weighted.\n")
 
         return nx_graph
-
 
     if graph is None:
         raise RuntimeError("Graph not constructed or loaded")
 
     else:
         if backend == "GT":
-            graph = prep_gt(graph, labels)
+            graph = prep_gt(graph, labels, clustering)
         elif backend == "NX":
-            graph = prep_nx(graph, labels)
+            graph = prep_nx(graph, labels, clustering)
 
     return graph
 
-
 def save_graph(graph, backend, outdir, file_name, file_format):
     if backend == "GT":
-        import graph_tool.all as gt
         if file_format is None:
-            graph.save(os.path.join(outdir, file_name+".gt"))
+            graph.save(os.path.join(outdir, file_name+".graphml"))
         elif file_format is not None:
             if file_format not in [".gt", ".graphml"]:
                 raise NotImplementedError("Supported file formats to save a graph-tools graph are .gt or .graphml")
@@ -295,6 +375,14 @@ def save_graph(graph, backend, outdir, file_name, file_format):
 ####   .VISUALISE   ####
 ########################
 def gt_generate_mst(graph):
+    """Create a minimum-spanning tree with graph-tool
+
+    Args:
+        graph (gt.Graph): Graph from which to calculate mst
+
+    Returns:
+        gt.Graph: the mst generated from the graph
+    """
     import graph_tool.all as gt
 
     mst_edge_prop_map = gt.min_spanning_tree(graph, weights = graph.ep["weight"])
@@ -343,10 +431,17 @@ def gt_generate_mst(graph):
         deep_edges = seed_mst_network.get_edges([seed_mst_network.ep["weight"]])
         mst_network.add_edge_list(deep_edges)
 
-
     return mst_network
 
 def nx_generate_mst(graph):
+    """Create a minimum-spanning tree with networkx
+
+    Args:
+        graph (nx.Graph): Graph from which to calculate mst
+
+    Returns:
+        nx.Graph: the mst generated from the graph
+    """
     import networkx as nx
 
     mst_network = nx.minimum_spanning_tree(graph)
@@ -374,7 +469,7 @@ def nx_generate_mst(graph):
                 if seed_edge[1] in seed_vertices:
                     found = True
                     connections.append((seed_edge))
-    
+
             if found == False:
                 for query in seed_vertices:
                     if query != ref:
@@ -387,62 +482,6 @@ def nx_generate_mst(graph):
         seed_mst_network = nx.minimum_spanning_tree(seed_G)
         deep_edges = list(seed_mst_network.edges(data = "weight"))
         mst_network.add_weighted_edges_from(deep_edges)
-
-    return mst_network
-
-def cu_generate_mst(graph):
-    import cugraph, cudf
-    """Generate a minimum spanning tree from a network
-    Args:
-       G (network)
-           Graph tool network
-       from_cugraph (bool)
-            If a pre-calculated MST from cugraph
-            [default = False]
-    Returns:
-       mst_network (str)
-           Minimum spanning tree (as graph-tool graph)
-    """
-    #
-    # Create MST
-    #
-
-    # Find seed nodes as those with greatest outdegree in each component
-    seed_vertices = set()
-    
-    mst_df = cugraph.components.connectivity.connected_components(mst_network)
-    num_components_idx = mst_df["labels"].max()
-    num_components = mst_df.iloc[num_components_idx]["labels"]
-    if num_components > 1:
-        mst_df["degree"] = mst_network.in_degree()["degree"]
-        # idxmax only returns first occurrence of maximum so should maintain
-        # MST - check cuDF implementation is the same
-        max_indices = mst_df.groupby(["labels"])["degree"].idxmax()
-        seed_vertices = mst_df.iloc[max_indices]["vertex"]
-
-    # If multiple components, add distances between seed nodes
-    if num_components > 1:
-
-        # Extract edges and maximum edge length - as DF for cugraph
-        # list of tuples for graph-tool
-        
-        # With cugraph the MST is already calculated
-        # so no extra edges can be retrieved from the graph
-        G_df = graph.view_edge_list()
-        max_weight = G_df["weights"].max()
-        first_seed = seed_vertices.iloc[0]
-        G_seed_link_df = cudf.DataFrame()
-        G_seed_link_df["dst"] = seed_vertices.iloc[1:seed_vertices.size]
-        G_seed_link_df["src"] = seed_vertices.iloc[0]
-        G_seed_link_df["weights"] = seed_vertices.iloc[0]
-        G_df = G_df.append(G_seed_link_df)
-
-    # Construct graph
-    mst_network = cugraph.Graph()
-    G_df.rename(columns={"src": "source","dst": "destination"}, inplace=True)
-    mst_network.from_cudf_edgelist(G_df, edge_attr="weights", renumber=False)
-
-    sys.stderr.write("Completed calculation of minimum-spanning tree with CU.\n")
 
     return mst_network
 
@@ -462,10 +501,11 @@ def generate_mst_network(graph, backend):
             mst_network = nx_generate_mst(graph) ##TODO
 
     elif backend == "CU":
-        if not graph.is_weighted():
-            raise unweighted_error_msg
-        else:
-            mst_network = cu_generate_mst(graph)
+        raise NotImplementedError("GPU graph not yet implemented")
+        # if not graph.is_weighted():
+        #     raise unweighted_error_msg
+        # else:
+        #     mst_network = cu_generate_mst(graph)
 
     return mst_network
 
@@ -478,6 +518,14 @@ def get_cluster_dict(clusters):
     return clustering
 
 def get_gt_clusters(graph):
+    """Calculate clusters from graph-tool graph
+
+    Args:
+        graph (gt.Graph): the graph from which to compute clusters
+
+    Returns:
+        dict: dictionary with node id as key and cluster number as value
+    """
     import graph_tool.all as gt
 
     vertex_labels = list(str(graph.vp["id"][v]) for v in graph.vertices())
@@ -499,6 +547,14 @@ def get_gt_clusters(graph):
     return clustering
 
 def get_nx_clusters(graph):
+    """Calculate clusters from networkx graph
+
+    Args:
+        graph (nx.Graph): the graph from which to compute clusters
+
+    Returns:
+        dict: dictionary with node id as key and cluster number as value
+    """
     import networkx as nx
 
     new_clusters = sorted(nx.connected_components(graph), key=len, reverse=True)
@@ -507,21 +563,15 @@ def get_nx_clusters(graph):
     return clustering
 
 def draw_gt_mst(mst, out_prefix, isolate_clustering, overwrite):
-    """Plot a layout of the minimum spanning tree
+    """Plot a layout of the minimum spanning tree with graph-tool
     Args:
-        mst (graph_tool.Graph)
-            A minimum spanning tree
-        outPrefix (str)
-            Output prefix for save files
-        isolate_clustering (dict)
-            Dictionary of ID: cluster, used for colouring vertices
-        clustering_name (str)
-            Name of clustering scheme to be used for colouring
-        overwrite (bool)
-            Overwrite existing output files
+        mst (gt.Graph): A minimum spanning tree
+        out_prefix (str): Output prefix for save files
+        isolate_clustering (dict): Dictionary of ID: cluster, used for colouring vertices
+        overwrite (bool): Overwrite existing output files
     """
     import graph_tool.all as gt
-    
+
     graph1_file_name = out_prefix + "_mst_stress_plot.png"
     graph2_file_name = out_prefix + "_mst_cluster_plot.png"
     if overwrite or not os.path.isfile(graph1_file_name) or not os.path.isfile(graph2_file_name):
@@ -552,8 +602,15 @@ def draw_gt_mst(mst, out_prefix, isolate_clustering, overwrite):
                     output=graph2_file_name, output_size=(3000, 3000))
 
 def draw_nx_mst(mst, out_prefix, isolate_clustering, overwrite):
+    """Plot a layout of the minimum spanning tree with networkx
+    Args:
+        mst (nx.Graph): A minimum spanning tree
+        out_prefix (str): Output prefix for save files
+        isolate_clustering (dict): Dictionary of ID: cluster, used for colouring vertices
+        overwrite (bool): Overwrite existing output files
+    """
     import networkx as nx
-    
+
     import matplotlib.pyplot as plt
 
     graph1_file_name = out_prefix + "_mst_stress_plot.png"
@@ -571,7 +628,6 @@ def draw_nx_mst(mst, out_prefix, isolate_clustering, overwrite):
             nx.draw_networkx_nodes(mst, pos=pos, node_size=10*deg, node_color=deg)
             nx.draw_networkx_edges(mst, pos=pos, edge_color=ebet, width=ebet)
             plt.axis("off")
-            # plt.show()
             plt.savefig(graph1_file_name)
             plt.close()
 
@@ -586,11 +642,17 @@ def draw_nx_mst(mst, out_prefix, isolate_clustering, overwrite):
             nx.draw_networkx_nodes(mst, pos=pos, node_size=100, node_color=[color for (node, color) in mst.nodes(data="plot_color")])
             nx.draw_networkx_edges(mst, pos=pos)
             plt.axis("off")
-            # plt.show()
             plt.savefig(graph2_file_name)
             plt.close()
 
 def gt_save_graph_components(graph, out_prefix, outdir):
+    """Save individual components of a graph-tool graph
+
+    Args:
+        graph (gt.Graph): Graph to save
+        out_prefix (str): prefix to be applied to output files
+        outdir (path/str): path to directory to save outputs to 
+    """
     import graph_tool.all as gt
 
     component_assignments, component_hist = gt.label_components(graph)
@@ -606,6 +668,13 @@ def gt_save_graph_components(graph, out_prefix, outdir):
         del G_copy
 
 def nx_save_graph_components(graph, out_prefix, outdir):
+    """Save individual components of a networkx graph
+
+    Args:
+        graph (nx.Graph): Graph to save
+        out_prefix (str): prefix to be applied to output files
+        outdir (path/str): path to directory to save outputs to 
+    """
     import networkx as nx
 
     for idx, c in enumerate(nx.connected_components(graph)):
@@ -616,6 +685,51 @@ def nx_save_graph_components(graph, out_prefix, outdir):
 ########################
 ####   .METADATA    ####
 ########################
+def gt_get_graph_data(graph):
+    weighted = False
+    if "weight" in graph.edge_properties:
+        weighted = True
+
+    edge_data = defaultdict(list)
+    node_data = defaultdict(list)
+    if weighted:
+        edge_list = list(graph.ep["weight"].a)
+
+    for idx, e in enumerate(graph.iter_edges()):
+        source_node = graph.vp.id[e[0]]
+        target_node = graph.vp.id[e[1]]
+        if weighted:
+            edge_weight = edge_list[idx]
+            edge_data[idx] = [source_node, target_node, edge_weight]
+        else:
+            edge_data[idx] = [source_node, target_node]
+
+    for idx, v in enumerate(graph.iter_vertices()):
+        node_id = graph.vp.id[v]
+        node_comp = graph.vp.comp_membership[v]
+        node_data[idx] = [node_id, node_comp]
+
+    return edge_data, node_data
+
+def nx_get_graph_data(graph):
+    weighted = False
+    edge_attrs = list(graph.edges(data=True))[0][-1].keys()
+    if "weight" in edge_attrs:
+        weighted = True
+    edge_data = defaultdict(list)
+    node_data = defaultdict(list)
+
+    if weighted:
+        for idx, (s, t, w) in enumerate(graph.edges.data("weight")):
+            edge_data[idx] = [graph.nodes()[s]["id"], graph.nodes()[t]["id"], w]
+    else:
+        for idx, (s, t) in enumerate(graph.edges(data=False)):
+            edge_data[idx] = [graph.nodes()[s]["id"], graph.nodes()[t]["id"]]
+
+    for idx, (v, v_data) in enumerate(graph.nodes(data=True)):
+        node_data[idx] = [v_data["id"], v_data["comp_membership"]]
+
+    return edge_data, node_data
 
 def write_cytoscape_csv(outfile, node_names, clustering, epi_csv = None, suffix = '_Cluster'):
     colnames = []
@@ -623,7 +737,7 @@ def write_cytoscape_csv(outfile, node_names, clustering, epi_csv = None, suffix 
     for cluster_type in clustering:
         col_name = cluster_type + suffix
         colnames.append(col_name)
-    
+
     # process epidemiological data
     d = defaultdict(list)
 
